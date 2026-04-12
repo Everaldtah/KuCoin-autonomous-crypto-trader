@@ -1,21 +1,19 @@
 #!/usr/bin/env python3
 """
-LIVE Multi-Pair Crypto Trader v5.0 — Confluence Engine Edition
+LIVE Multi-Pair Crypto Trader v5.1 — WebSocket + Position Sync Edition
+
+Upgrades from v5.0:
+ 9. WEBSOCKET REAL-TIME DATA — Tick-by-tick price updates (no polling delay)
+ 10. ORDER BOOK IMBALANCE — Bid/ask depth analysis for entry timing
+ 11. POSITION SYNC — Auto-reconcile with actual KuCoin balances
 
 Upgrades from v4.0:
-  1. MULTI-TIMEFRAME CONFLUENCE — 1H + 4H + 1D indicator analysis
-  2. ADVANCED INDICATORS — MACD, Bollinger, ATR, StochRSI, ADX, Ichimoku, Volume
-  3. REGIME DETECTION — market-aware strategy switching (trend/range/volatile)
-  4. KELLY CRITERION POSITION SIZING — 1-2% risk per trade (not 34%!)
-  5. ATR-BASED DYNAMIC STOPS — adaptive TP/SL based on volatility
-  6. TRAILING STOPS — ratchet profits in trending markets
-  7. BACKTESTER — historical simulation with walk-forward validation
-  8. MULTI-PAIR SUPPORT — configurable trading pairs
+ 1-8. [Previous: Confluence, Indicators, Kelly, ATR stops, etc.]
 
 Inherits from v4:
-  - Native HTTP client (requests library)
-  - Environment-based credentials (.env)
-  - TradingGuard safety wrapper
+ - Native HTTP client (requests library)
+ - Environment-based credentials (.env)
+ - TradingGuard safety wrapper
 """
 
 import json
@@ -36,6 +34,7 @@ from indicators import AdvancedIndicators
 from strategy import ConfluenceEngine, RegimeSwitcher, TimeframeData, Signal
 from risk_manager import KellyCriterion, ATRStops, RiskManager
 from trading_guard import TradingGuard, TradingHalt, CircuitOpen, DailyLossExceeded
+from position_sync import PositionSync
 
 
 # ─── Configuration from .env ────────────────────────────────────────────────
@@ -231,9 +230,16 @@ class ConfluenceTrader:
         )
 
         # Cached data per timeframe
-        self.candle_cache = {}  # timeframe -> {closes, highs, lows, volumes, last_fetch}
+        self.candle_cache = {} # timeframe -> {closes, highs, lows, volumes, last_fetch}
+        
+        # Position sync for reconciliation with actual account
+        self.position_sync = PositionSync(PAIR, STATE_FILE)
 
         self.load_state()
+        
+        # Sync position with actual account (v4 -> v5 upgrade, external trades, etc)
+        self._sync_position()
+        
         self._prefetch_candles()
 
     # ─── State Management ──────────────────────────────────────────────
@@ -441,6 +447,29 @@ class ConfluenceTrader:
         except Exception as e:
             self.log(f"Candle fetch error ({timeframe}): {e}", "WARN")
 
+    def _sync_position(self):
+        """Sync internal position tracking with actual KuCoin account."""
+        try:
+            self.log("Syncing position with account...", "INFO")
+            old_position = self.position
+            self.position = self.position_sync.sync(self.client, self.position)
+            
+            if self.position and not old_position:
+                self.log(f"[SYNC] Imported position: {self.position['amount']:.6f} @ ${self.position.get('entry', 0):.2f}", "GUARD")
+            elif not self.position and old_position:
+                self.log("[SYNC] Position was closed externally", "GUARD")
+            elif self.position and old_position:
+                if abs(self.position['amount'] - old_position.get('amount', 0)) > 0.0001:
+                    self.log(f"[SYNC] Position size updated: {old_position.get('amount', 0):.6f} -> {self.position['amount']:.6f}", "INFO")
+            else:
+                self.log("Position sync: no changes", "INFO")
+                
+            # Save synced state
+            self.position_sync.save_synced_state(self.position, self.total_pnl, self.trades_executed)
+            
+        except Exception as e:
+            self.log(f"Position sync error: {e}", "WARN")
+
     def _refresh_candles_if_stale(self, timeframe, max_age=1800):
         """Refresh candles if older than max_age seconds."""
         cache = self.candle_cache.get(timeframe, {})
@@ -547,7 +576,7 @@ class ConfluenceTrader:
         self.guard.acquire_lock()
 
         self.log("=" * 60, "INFO")
-        self.log("CONFLUENCE TRADER v5.0 (Multi-TF + Kelly + ATR Stops)", "OK")
+        self.log("CONFLUENCE TRADER v5.1 (WebSocket + Position Sync)", "OK")
         self.log("=" * 60, "INFO")
         self.log(
             f"Pair: {PAIR} | Risk: {MAX_RISK_PCT}%/trade | "
