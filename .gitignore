@@ -1,0 +1,28 @@
+# Credentials — NEVER commit these
+.env
+*.key
+*.secret
+
+# State files — runtime data, not code
+trader_state.json
+bot_state.json
+guard_state.json
+bot.pid
+*.log
+*.log.1
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Node (dashboard)
+dashboard/node_modules/
+dashboard/.next/
+dashboard/.vercel/
+
+# OS
+.DS_Store
+Thumbs.db
