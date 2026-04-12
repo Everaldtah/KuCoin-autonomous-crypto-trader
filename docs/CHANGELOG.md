@@ -1,6 +1,30 @@
 # Changelog
 
-## v5.0 — Confluence Engine Edition (Current)
+## v5.1 — HEPHAESTUS: Multi-Pair Portfolio Edition (Current)
+
+### Added
+- **Multi-Pair Trading**: 12 pairs simultaneous (ETH, BTC, SOL, LINK, AVAX, DOT, MATIC, UNI, AAVE, ATOM, ADA, DOGE)
+- **Ensemble Indicator Engine**: Composite signal from 7 indicators (RSI, EMA, MFI, MACD, Bollinger, Super Trend, ADX)
+- **Portfolio Kelly Criterion**: Optimal bet sizing across multiple positions, 25% fractional Kelly
+- **Correlation Matrix Calculation**: Assets weighted by correlation (avoid doubling down on same risk)
+- **Async Architecture**: Concurrent pair monitoring with aiohttp (20s cycle vs 60s sequential)
+- **Thinking Process Visualization**: Real-time neural graph streaming to Obsidian dashboard
+- **Portfolio Drawdown Protection**: 8% circuit breaker halts all trading
+- **Dynamic Signal Thresholds**: Entry/exit based on composite score (0-1) not single indicator
+- **Position Size Constraints**: 3-15% per pair, volatility-adjusted ATR sizing
+
+### Changed
+- Trading scope: Single-pair (ETH-USDT) → Multi-pair portfolio (up to 5 concurrent)
+- Architecture: Sync KuCoin client → Async aiohttp with connection pooling
+- Analysis: 1-pair RSI+EMA → 12-pair 7-indicator ensemble
+- Risk: Position-level stops → Portfolio-level drawdown + pair correlation
+
+### Integration
+- New Dashboard: https://hermes-agent-obsidian-view.vercel.app/thinking
+- Sync script at `src/sync_thinking_to_dashboard.py`
+- Real-time visualization of data sources, signal calculations, trade decisions
+
+## v5.0 — Confluence Engine Edition
 
 ### Added
 - **Multi-Timeframe Confluence Engine**: Weighted scoring across 1H, 4H, 1D timeframes
