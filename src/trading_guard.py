@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """
-Trading Guard Module v1.0
+Trading Guard Module v1.1
 =========================
 Prevents loops, bugs, and runaway losses in the ETH trading bot.
 
 Import and wrap around any trading bot to get:
   - Duplicate process prevention (PID lockfile)
   - Circuit breaker for API failures
-  - Daily loss limit enforcement
+  - Daily loss limit enforcement (fixed $ and percentage-based)
+  - Portfolio drawdown tracking (peak-balance high-water mark)
+  - Correlation warning (rapid-loss cluster detection)
   - Max position hold time
   - Position-reality sync (detects stale state)
   - Log rotation (prevents disk fill)
@@ -21,16 +23,21 @@ Usage:
       pid_file="/root/bot.pid",
       log_file="/root/bot.log",
       state_file="/root/trader_state.json",
-      max_daily_loss=5.0,       # $5 max daily loss
-      max_hold_hours=4,         # Force-exit after 4h in same position
-      max_consecutive_fails=5,  # Circuit breaker threshold
-      max_log_size_mb=5,        # Rotate log at 5MB
-      api_rate_limit_sec=1,     # Min 1s between API calls
+      max_daily_loss=5.0,              # $5 max daily loss
+      max_daily_loss_pct=5.0,          # 5% of starting balance
+      max_drawdown_pct=15.0,           # 15% drawdown from peak
+      max_hold_hours=4,                # Force-exit after 4h in same position
+      max_consecutive_fails=5,         # Circuit breaker threshold
+      max_log_size_mb=5,               # Rotate log at 5MB
+      api_rate_limit_sec=1,            # Min 1s between API calls
+      correlation_loss_window_sec=300, # 5-min window for rapid loss detection
+      correlation_loss_threshold=3,    # 3 losses in window triggers cooldown
   )
 
   # In your main loop:
   guard.acquire_lock()              # Kills duplicate processes
   guard.rotate_log_if_needed()
+  guard.update_balance(total_usd)   # Feed portfolio value each iteration
 
   while running:
       guard.check_health(price, position)  # Raises TradingHalt on critical
@@ -113,6 +120,12 @@ class TradingGuard:
         api_rate_limit_sec: float = 1.0,
         cooldown_after_fail_sec: float = 30.0,
         max_trades_per_hour: int = 10,
+        # ── Portfolio-level risk parameters ──
+        max_daily_loss_pct: float = 5.0,
+        max_drawdown_pct: float = 15.0,
+        correlation_loss_window_sec: float = 300.0,
+        correlation_loss_threshold: int = 3,
+        correlation_cooldown_multiplier: float = 3.0,
     ):
         self.pid_file = pid_file
         self.log_file = log_file
@@ -125,6 +138,13 @@ class TradingGuard:
         self.api_rate_limit_sec = api_rate_limit_sec
         self.cooldown_after_fail_sec = cooldown_after_fail_sec
         self.max_trades_per_hour = max_trades_per_hour
+
+        # Portfolio-level risk settings
+        self.max_daily_loss_pct = max_daily_loss_pct          # e.g. 5.0 means 5%
+        self.max_drawdown_pct = max_drawdown_pct              # e.g. 15.0 means 15% drawdown from peak
+        self.correlation_loss_window_sec = correlation_loss_window_sec   # seconds for rapid-loss window
+        self.correlation_loss_threshold = correlation_loss_threshold     # losses in window to trigger warning
+        self.correlation_cooldown_multiplier = correlation_cooldown_multiplier
 
         self._lock_fd = None
         self._api_lock = Lock()
@@ -150,6 +170,15 @@ class TradingGuard:
             "total_blocked_trades": 0,
             "emergency_stops": 0,
             "last_health_check": None,
+            # ── Portfolio-level risk state ──
+            "peak_balance": 0.0,
+            "current_balance": 0.0,
+            "starting_balance_today": 0.0,
+            "max_drawdown_reached_pct": 0.0,
+            "loss_timestamps": [],
+            "correlation_warnings": 0,
+            "correlation_cooldown_active": False,
+            "correlation_cooldown_until": None,
         }
 
     def _load_guard_state(self) -> dict:
@@ -162,10 +191,16 @@ class TradingGuard:
                 if saved.get("daily_loss_date") != today:
                     saved["daily_loss"] = 0.0
                     saved["daily_loss_date"] = today
+                    saved["starting_balance_today"] = saved.get("current_balance", 0.0)
                 if saved.get("trades_today_date") != today:
                     saved["trades_today"] = 0
                     saved["trades_today_date"] = today
                     saved["trade_timestamps"] = []
+                # Backfill any missing portfolio risk keys from defaults
+                defaults = self._default_state()
+                for key in defaults:
+                    if key not in saved:
+                        saved[key] = defaults[key]
                 return saved
         except Exception:
             pass
@@ -186,6 +221,8 @@ class TradingGuard:
             self._state["trades_today"] = 0
             self._state["trades_today_date"] = today
             self._state["trade_timestamps"] = []
+            self._state["starting_balance_today"] = self._state.get("current_balance", 0.0)
+            self._state["loss_timestamps"] = []
 
     # ─── Duplicate Process Prevention ─────────────────────────────
 
@@ -387,7 +424,17 @@ class TradingGuard:
         self._reset_daily_if_needed()
         self._check_circuit()
 
-        # Check daily loss limit
+        # ── Check correlation cooldown ──
+        correlation_remaining = self._check_correlation_cooldown()
+        if correlation_remaining > 0:
+            self._state["total_blocked_trades"] += 1
+            self._save_guard_state()
+            raise TradingHalt(
+                f"Correlation cooldown active: {correlation_remaining:.0f}s remaining. "
+                f"Multiple rapid losses detected."
+            )
+
+        # ── Check daily loss limit (fixed dollar) ──
         if side == "sell":
             if self._state["daily_loss"] >= self.max_daily_loss:
                 self._state["total_blocked_trades"] += 1
@@ -395,6 +442,32 @@ class TradingGuard:
                 raise DailyLossExceeded(
                     f"Daily loss limit reached: ${self._state['daily_loss']:.2f} / "
                     f"${self.max_daily_loss:.2f}"
+                )
+
+        # ── Check daily loss limit (percentage-based) ──
+        if self._state.get("starting_balance_today", 0) > 0:
+            daily_loss_pct_actual = (
+                self._state["daily_loss"] / self._state["starting_balance_today"] * 100
+            )
+            if daily_loss_pct_actual >= self.max_daily_loss_pct:
+                self._state["total_blocked_trades"] += 1
+                self._save_guard_state()
+                raise DailyLossExceeded(
+                    f"Daily loss % limit reached: {daily_loss_pct_actual:.2f}% / "
+                    f"{self.max_daily_loss_pct:.2f}% of starting balance "
+                    f"(${self._state['starting_balance_today']:.2f})"
+                )
+
+        # ── Check portfolio drawdown ──
+        if self._state.get("peak_balance", 0) > 0:
+            drawdown_pct = self._compute_drawdown_pct()
+            if drawdown_pct >= self.max_drawdown_pct:
+                self._state["total_blocked_trades"] += 1
+                self._save_guard_state()
+                raise TradingHalt(
+                    f"Portfolio drawdown limit reached: {drawdown_pct:.2f}% / "
+                    f"{self.max_drawdown_pct:.2f}% from peak "
+                    f"(${self._state['peak_balance']:.2f})"
                 )
 
         # Check trades-per-hour rate
@@ -430,6 +503,10 @@ class TradingGuard:
 
             if pnl < 0:
                 self._state["daily_loss"] += abs(pnl)
+                # ── Track loss timestamp for correlation detection ──
+                self._state["loss_timestamps"].append(time.time())
+                self._trim_loss_timestamps()
+                self._check_correlation_warning()
 
             if side == "buy":
                 self._state["last_position_entry"] = datetime.now().isoformat()
@@ -447,7 +524,7 @@ class TradingGuard:
         self._state["last_health_check"] = datetime.now().isoformat()
         self.rotate_log_if_needed()
 
-        # ── Daily loss check ──
+        # ── Daily loss check (fixed dollar) ──
         if self._state["daily_loss"] >= self.max_daily_loss:
             self._state["emergency_stops"] += 1
             self._save_guard_state()
@@ -455,6 +532,33 @@ class TradingGuard:
                 f"🚨 EMERGENCY STOP: Daily loss ${self._state['daily_loss']:.2f} "
                 f"exceeds limit ${self.max_daily_loss:.2f}"
             )
+
+        # ── Daily loss check (percentage-based) ──
+        if self._state.get("starting_balance_today", 0) > 0:
+            daily_loss_pct_actual = (
+                self._state["daily_loss"] / self._state["starting_balance_today"] * 100
+            )
+            if daily_loss_pct_actual >= self.max_daily_loss_pct:
+                self._state["emergency_stops"] += 1
+                self._save_guard_state()
+                raise TradingHalt(
+                    f"🚨 EMERGENCY STOP: Daily loss {daily_loss_pct_actual:.2f}% "
+                    f"exceeds {self.max_daily_loss_pct:.2f}% of starting balance "
+                    f"(${self._state['starting_balance_today']:.2f})"
+                )
+
+        # ── Portfolio drawdown check ──
+        if self._state.get("peak_balance", 0) > 0:
+            drawdown_pct = self._compute_drawdown_pct()
+            if drawdown_pct >= self.max_drawdown_pct:
+                self._state["emergency_stops"] += 1
+                self._save_guard_state()
+                raise TradingHalt(
+                    f"🚨 EMERGENCY STOP: Portfolio drawdown {drawdown_pct:.2f}% "
+                    f"exceeds {self.max_drawdown_pct:.2f}% limit. "
+                    f"Peak: ${self._state['peak_balance']:.2f}, "
+                    f"Current: ${self._state.get('current_balance', 0):.2f}"
+                )
 
         # ── Max hold time check ──
         if position and position.get("timestamp"):
@@ -496,6 +600,109 @@ class TradingGuard:
         except Exception:
             pass
         return 1.5
+
+    # ─── Portfolio Risk Methods ────────────────────────────────────
+
+    def update_balance(self, current_balance: float):
+        """
+        Update the guard's knowledge of the current portfolio balance.
+        Call periodically (e.g. each main loop iteration) to track
+        peak balance and drawdown.
+
+        Args:
+            current_balance: Total portfolio value in USD (cash + positions)
+        """
+        self._state["current_balance"] = current_balance
+
+        # Update peak balance (high-water mark)
+        if current_balance > self._state.get("peak_balance", 0):
+            self._state["peak_balance"] = current_balance
+
+        # Set starting balance for today if not yet set
+        if self._state.get("starting_balance_today", 0) <= 0:
+            self._state["starting_balance_today"] = current_balance
+
+        # Track max drawdown reached
+        drawdown = self._compute_drawdown_pct()
+        if drawdown > self._state.get("max_drawdown_reached_pct", 0):
+            self._state["max_drawdown_reached_pct"] = round(drawdown, 4)
+
+        self._save_guard_state()
+
+    def _compute_drawdown_pct(self) -> float:
+        """
+        Compute current drawdown percentage from peak balance.
+        Returns 0.0 if peak balance is not set or current exceeds peak.
+        """
+        peak = self._state.get("peak_balance", 0)
+        current = self._state.get("current_balance", 0)
+        if peak <= 0 or current <= 0:
+            return 0.0
+        if current >= peak:
+            return 0.0
+        return ((peak - current) / peak) * 100
+
+    def _trim_loss_timestamps(self):
+        """Remove loss timestamps older than the correlation window."""
+        cutoff = time.time() - self.correlation_loss_window_sec
+        self._state["loss_timestamps"] = [
+            t for t in self._state.get("loss_timestamps", [])
+            if t > cutoff
+        ]
+
+    def _check_correlation_warning(self):
+        """
+        Detect multiple rapid losses in a short window and activate
+        an enhanced cooldown. This catches correlated adverse events
+        (e.g. flash crash, cascading liquidations).
+        """
+        recent_losses = self._state.get("loss_timestamps", [])
+        if len(recent_losses) >= self.correlation_loss_threshold:
+            self._state["correlation_warnings"] += 1
+            # Compute cooldown: base cooldown * multiplier * warning count
+            base_cooldown = self.cooldown_after_fail_sec
+            cooldown = min(
+                base_cooldown
+                * self.correlation_cooldown_multiplier
+                * self._state["correlation_warnings"],
+                3600  # Cap at 1 hour
+            )
+            cooldown_until = (datetime.now() + timedelta(seconds=cooldown)).isoformat()
+            self._state["correlation_cooldown_active"] = True
+            self._state["correlation_cooldown_until"] = cooldown_until
+            print(
+                f"[GUARD] 🔴 CORRELATION WARNING: {len(recent_losses)} losses in "
+                f"{self.correlation_loss_window_sec:.0f}s window. "
+                f"Cooldown {cooldown:.0f}s (warning #{self._state['correlation_warnings']})"
+            )
+            self._save_guard_state()
+
+    def _check_correlation_cooldown(self) -> float:
+        """
+        Check if correlation cooldown is active. Returns seconds remaining
+        if active, 0.0 if cooldown is clear.
+        """
+        if not self._state.get("correlation_cooldown_active", False):
+            return 0.0
+
+        cooldown_until_str = self._state.get("correlation_cooldown_until")
+        if not cooldown_until_str:
+            self._state["correlation_cooldown_active"] = False
+            return 0.0
+
+        try:
+            cooldown_until = datetime.fromisoformat(cooldown_until_str)
+            remaining = (cooldown_until - datetime.now()).total_seconds()
+            if remaining <= 0:
+                self._state["correlation_cooldown_active"] = False
+                self._state["correlation_cooldown_until"] = None
+                self._save_guard_state()
+                return 0.0
+            return remaining
+        except (ValueError, TypeError):
+            self._state["correlation_cooldown_active"] = False
+            self._state["correlation_cooldown_until"] = None
+            return 0.0
 
     # ─── Position Reality Sync ────────────────────────────────────
 
@@ -561,6 +768,14 @@ class TradingGuard:
     def get_status(self) -> dict:
         """Get current guard status for dashboard/reporting."""
         self._reset_daily_if_needed()
+
+        drawdown_pct = self._compute_drawdown_pct()
+        daily_loss_pct_actual = 0.0
+        if self._state.get("starting_balance_today", 0) > 0:
+            daily_loss_pct_actual = (
+                self._state["daily_loss"] / self._state["starting_balance_today"] * 100
+            )
+
         return {
             "daily_loss": self._state["daily_loss"],
             "daily_loss_limit": self.max_daily_loss,
@@ -577,11 +792,32 @@ class TradingGuard:
             "last_health_check": self._state.get("last_health_check"),
             "pid": os.getpid(),
             "lock_held": self._lock_fd is not None,
+            # ── Portfolio risk metrics ──
+            "portfolio": {
+                "current_balance": self._state.get("current_balance", 0.0),
+                "peak_balance": self._state.get("peak_balance", 0.0),
+                "starting_balance_today": self._state.get("starting_balance_today", 0.0),
+                "drawdown_pct": round(drawdown_pct, 4),
+                "drawdown_limit_pct": self.max_drawdown_pct,
+                "max_drawdown_reached_pct": self._state.get("max_drawdown_reached_pct", 0.0),
+                "daily_loss_pct_of_start": round(daily_loss_pct_actual, 4),
+                "daily_loss_pct_limit": self.max_daily_loss_pct,
+            },
+            "correlation": {
+                "active": self._state.get("correlation_cooldown_active", False),
+                "cooldown_until": self._state.get("correlation_cooldown_until"),
+                "warnings_count": self._state.get("correlation_warnings", 0),
+                "recent_losses_in_window": len(self._state.get("loss_timestamps", [])),
+                "threshold": self.correlation_loss_threshold,
+                "window_sec": self.correlation_loss_window_sec,
+            },
         }
 
     def format_status(self) -> str:
         """Human-readable status for Telegram/logging."""
         s = self.get_status()
+        p = s["portfolio"]
+        c = s["correlation"]
         lines = [
             f"🛡️ GUARD STATUS",
             f"  Daily Loss: ${s['daily_loss']:.2f} / ${s['daily_loss_limit']:.2f} ({s['daily_loss_pct']:.0f}%)",
@@ -595,6 +831,19 @@ class TradingGuard:
             f"  Emergency Stops: {s['emergency_stops']}",
             f"  Blocked Trades: {s['blocked_trades']}",
             f"  PID: {s['pid']} (lock: {'✅' if s['lock_held'] else '❌'})",
+            "",
+            f"📊 PORTFOLIO RISK",
+            f"  Current Balance: ${p['current_balance']:.2f}",
+            f"  Peak Balance:    ${p['peak_balance']:.2f}",
+            f"  Start (today):   ${p['starting_balance_today']:.2f}",
+            f"  Drawdown:        {p['drawdown_pct']:.2f}% / {p['drawdown_limit_pct']:.2f}% limit",
+            f"  Max Drawdown:    {p['max_drawdown_reached_pct']:.2f}%",
+            f"  Daily Loss %:    {p['daily_loss_pct_of_start']:.2f}% / {p['daily_loss_pct_limit']:.2f}% limit",
+            "",
+            f"🔗 CORRELATION RISK",
+            f"  Recent Losses ({c['window_sec']:.0f}s): {c['recent_losses_in_window']} / {c['threshold']} threshold",
+            f"  Warnings: {c['warnings_count']}",
+            f"  Cooldown: {'🔴 ACTIVE until ' + str(c['cooldown_until']) if c['active'] else '🟢 CLEAR'}",
         ])
         return "\n".join(lines)
 
@@ -681,7 +930,7 @@ if __name__ == "__main__":
     elif "--reset" in sys.argv:
         reset_guard()
     else:
-        print("Trading Guard Module v1.0")
+        print("Trading Guard Module v1.1")
         print("Usage:")
         print("  python3 trading_guard.py --kill     Kill all duplicate bot processes")
         print("  python3 trading_guard.py --status   Show guard status")
