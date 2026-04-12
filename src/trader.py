@@ -39,10 +39,19 @@ from trading_guard import TradingGuard, TradingHalt, CircuitOpen, DailyLossExcee
 
 
 # ─── Configuration from .env ────────────────────────────────────────────────
-def load_env(env_path=os.path.join(os.path.dirname(os.path.dirname(__file__)), "config", ".env")):
+def load_env(env_path=None):
     """Load .env file into os.environ."""
+    if env_path is None:
+        # Resolve absolute path regardless of how script is invoked
+        _script_dir = os.path.dirname(os.path.abspath(__file__))
+        env_path = os.path.join(os.path.dirname(_script_dir), "config", ".env")
     if not os.path.exists(env_path):
-        return
+        # Fallback: try /root/.env (standard bot deployment)
+        fallback = "/root/.env"
+        if os.path.exists(fallback):
+            env_path = fallback
+        else:
+            return
     with open(env_path) as f:
         for line in f:
             line = line.strip()
@@ -351,7 +360,7 @@ class ConfluenceTrader:
     def get_balance(self):
         """Get trade account balances."""
         try:
-            success, data = self.client.get("/api/v1/accounts", params={"type": "trade"})
+            success, data = self.client.get("/api/v1/accounts", params={"type": "trade"}, auth=True)
             if success:
                 currencies = PAIR.split("-")
                 balances = {c: 0.0 for c in currencies}
