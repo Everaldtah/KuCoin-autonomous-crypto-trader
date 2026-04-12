@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """
-LIVE Multi-Pair Crypto Trader v5.1 — WebSocket + Position Sync Edition
+LIVE Multi-Pair Crypto Trader v5.2 — Trailing + Execution + Correlation Edition
 
-Upgrades from v5.0:
- 9. WEBSOCKET REAL-TIME DATA — Tick-by-tick price updates (no polling delay)
- 10. ORDER BOOK IMBALANCE — Bid/ask depth analysis for entry timing
- 11. POSITION SYNC — Auto-reconcile with actual KuCoin balances
+Upgrades from v5.1:
+ 12. TRAILING STOPS — Ratchet profits up, lock in gains in trending markets
+ 13. ORDER FILL VERIFICATION — Verify actual fill prices vs requested
+ 14. CORRELATION TRACKING — Multi-asset correlation for diversification
+ 15. PORTFOLIO DRAWDOWN — True peak-to-trough portfolio monitoring
 
-Upgrades from v4.0:
- 1-8. [Previous: Confluence, Indicators, Kelly, ATR stops, etc.]
+Upgrades from v5.0-4.0:
+ 1-11. Multi-timeframe, Kelly, ATR stops, WebSocket, Position Sync, etc.
 
 Inherits from v4:
  - Native HTTP client (requests library)
@@ -32,9 +33,12 @@ import numpy as np
 
 from indicators import AdvancedIndicators
 from strategy import ConfluenceEngine, RegimeSwitcher, TimeframeData, Signal
-from risk_manager import KellyCriterion, ATRStops, RiskManager
+from risk_manager import KellyCriterion, ATRStops, RiskManager, TrailingStopManager
 from trading_guard import TradingGuard, TradingHalt, CircuitOpen, DailyLossExceeded
 from position_sync import PositionSync
+from order_execution import OrderExecutor, OrderResult
+from correlation_tracker import CorrelationTracker
+from drawdown_tracker import DrawdownTracker
 
 
 # ─── Configuration from .env ────────────────────────────────────────────────
@@ -70,6 +74,7 @@ KUCOIN_PASSPHRASE = os.environ.get("KUCOIN_PASSPHRASE", "")
 
 # Trading parameters
 PAIR = os.environ.get("TRADING_PAIR", "ETH-USDT")
+EXTRA_PAIRS = os.environ.get("EXTRA_PAIRS", "").split(",") if os.environ.get("EXTRA_PAIRS") else []
 INITIAL_BALANCE = float(os.environ.get("INITIAL_BALANCE", "100"))
 MAX_RISK_PCT = float(os.environ.get("MAX_RISK_PER_TRADE_PCT", "2.0"))
 MAX_DAILY_LOSS_PCT = float(os.environ.get("MAX_DAILY_LOSS_PCT", "5.0"))
@@ -214,6 +219,22 @@ class ConfluenceTrader:
             max_portfolio_drawdown_pct=MAX_DRAWDOWN_PCT,
             max_open_positions=1,
         )
+        
+        # Smart order execution with fill verification
+        self.order_executor = OrderExecutor(
+            self.client,
+            PAIR,
+            max_slippage_bps=50,  # 0.5%
+        )
+        
+        # Correlation tracking for multi-pair diversification
+        self.correlation_tracker = CorrelationTracker(
+            [PAIR] + EXTRA_PAIRS,
+            window=100,
+        )
+        
+        # Portfolio drawdown tracking
+        self.drawdown_tracker = DrawdownTracker(max_points=10000)
 
         self.guard = TradingGuard(
             pid_file=os.environ.get("PID_FILE", os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "bot.pid")),
@@ -576,7 +597,7 @@ class ConfluenceTrader:
         self.guard.acquire_lock()
 
         self.log("=" * 60, "INFO")
-        self.log("CONFLUENCE TRADER v5.1 (WebSocket + Position Sync)", "OK")
+        self.log("CONFLUENCE TRADER v5.2 (Trailing + Execution + Correlation)", "OK")
         self.log("=" * 60, "INFO")
         self.log(
             f"Pair: {PAIR} | Risk: {MAX_RISK_PCT}%/trade | "
