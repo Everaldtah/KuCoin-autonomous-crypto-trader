@@ -184,7 +184,7 @@ class PortfolioState:
     daily_loss: float = 0.0
     pairs: Dict[str, PairData] = field(default_factory=dict)
     active_positions: Dict[str, Dict] = field(default_factory=dict)
-    correlation_matrix: Dict[str, Dict[float]] = field(default_factory=dict)
+    correlation_matrix: Dict[str, Dict[str, float]] = field(default_factory=dict)
     indicator_weights: Dict[str, float] = field(default_factory=lambda: {
         "rsi": 0.20,
         "ema": 0.20,
@@ -1212,13 +1212,14 @@ class SmartPortfolioTrader:
 # ─── Main Entry Point ─────────────────────────────────────────────
 
 def main():
+    global INITIAL_CAPITAL, MAX_PAIRS
+    
     parser = argparse.ArgumentParser(description="Multi-Pair Portfolio Trader v5.0")
     parser.add_argument("--dry-run", action="store_true", help="Simulate without trading")
     parser.add_argument("--capital", type=float, default=INITIAL_CAPITAL, help="Trading capital")
     parser.add_argument("--max-pairs", type=int, default=MAX_PAIRS, help="Max concurrent positions")
     args = parser.parse_args()
     
-    global INITIAL_CAPITAL, MAX_PAIRS
     INITIAL_CAPITAL = args.capital
     MAX_PAIRS = args.max_pairs
     
