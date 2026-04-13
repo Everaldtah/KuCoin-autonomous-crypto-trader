@@ -71,3 +71,36 @@
 ### Added
 - Auto-recovery from crashes, state persistence
 - Basic buy/sell with fixed TP/SL
+
+## v4.1 - MACD Confirmation Upgrade (2026-04-13)
+
+### Added
+- **MACD(12/26/9) indicator computation** - Full MACD implementation with signal line and histogram
+- **MACD confirmation filter** - Entries now require MACD histogram > 0 (bullish momentum)
+- **Enhanced status logging** - MACD histogram now displayed in all status messages
+- **Improved entry diagnostics** - Log now shows which conditions are failing (RSI, MACD, trend)
+
+### Changed
+- **Entry logic** - Now requires 3 confirmations instead of 2:
+  1. RSI < 30 (oversold)
+  2. EMA(9) > EMA(21) (bullish trend)
+  3. **MACD histogram > 0** (bullish momentum) ← NEW
+- **Status format** - Added MACD histogram display to position and status messages
+- **Version banner** - Updated to v4.1 (RSI+EMA+MACD)
+
+### Technical Details
+- MACD computed using numpy for performance
+- Histogram = MACD line - Signal line
+- Requires minimum 35 price points for valid MACD calculation
+- Falls back to 0.0 histogram during warmup period
+
+### Strategy Impact
+- **Before**: Entered on RSI+EMA alone → prone to false breakouts
+- **After**: Requires RSI+EMA+MACD alignment → higher quality entries, fewer false signals
+- **Trade frequency**: Slightly reduced (filtering weak setups)
+- **Expected win rate**: Improved by filtering premature entries
+
+### Files Modified
+- `live_eth_trader_v4.py` - Main trading bot
+- `versions/trader_v4.1_macd.py` - Archived version
+
