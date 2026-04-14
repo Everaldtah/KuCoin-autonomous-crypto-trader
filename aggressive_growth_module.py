@@ -26,7 +26,7 @@ from dataclasses import dataclass
 # ─── Configuration Loader ────────────────────────────────────────
 
 def load_aggressive_config(env_path: str = "/root/.env_aggressive") -> Dict:
-    """Load aggressive growth configuration."""
+    """Load aggressive growth configuration with validation."""
     config = {
         # Defaults
         "initial_capital": 1000.0,
@@ -42,6 +42,34 @@ def load_aggressive_config(env_path: str = "/root/.env_aggressive") -> Dict:
         "target_date": "2026-12-31"
     }
     
+    def _clean_value(val: str) -> str:
+        """Remove surrounding quotes and comments from config values."""
+        val = val.strip()
+        # Only strip inline comments (after whitespace) FIRST
+        if ' #' in val:
+            val = val.split(' #')[0].strip()
+        # Remove surrounding quotes (single and double) AFTER comment removal
+        if (val.startswith('"') and val.endswith('"')) or \
+           (val.startswith("'") and val.endswith("'")):
+            val = val[1:-1].strip()
+        return val
+    
+    def _parse_bool(val: str) -> bool:
+        """Parse truthy boolean values robustly."""
+        cleaned = _clean_value(val).lower()
+        return cleaned in ('true', '1', 'yes', 'on', 'enabled')
+    
+    def _safe_float(val: str, default: float, param_name: str) -> float:
+        """Safely convert value to float with validation."""
+        try:
+            cleaned = _clean_value(val)
+            if not cleaned:
+                return default
+            return float(cleaned)
+        except (ValueError, TypeError):
+            print(f"[CONFIG WARNING] Invalid value for {param_name}: '{val}', using default {default}")
+            return default
+    
     if os.path.exists(env_path):
         with open(env_path) as f:
             for line in f:
@@ -51,34 +79,38 @@ def load_aggressive_config(env_path: str = "/root/.env_aggressive") -> Dict:
                 if "=" in line:
                     key, _, val = line.partition("=")
                     key = key.strip()
-                    val = val.strip().strip("'")
-                    # Remove inline comments
-                    if "#" in val:
-                        val = val.split("#")[0].strip()
                     
-                    # Map env vars to config
+                    # Map env vars to config with validation
                     if key == "INITIAL_BALANCE":
-                        config["initial_capital"] = float(val)
+                        v = _safe_float(val, config["initial_capital"], "INITIAL_BALANCE")
+                        if v > 0:
+                            config["initial_capital"] = v
+                        else:
+                            print(f"[CONFIG WARNING] INITIAL_BALANCE must be positive, using default")
                     elif key == "PROFIT_REINVEST_PCT":
-                        config["profit_reinvest_pct"] = float(val)
+                        v = _safe_float(val, config["profit_reinvest_pct"], "PROFIT_REINVEST_PCT")
+                        if 0 <= v <= 100:
+                            config["profit_reinvest_pct"] = v
+                        else:
+                            print(f"[CONFIG WARNING] PROFIT_REINVEST_PCT must be 0-100, using default")
                     elif key == "PYRAMIDING_ENABLED":
-                        config["pyramiding_enabled"] = val.lower() == "true"
+                        config["pyramiding_enabled"] = _parse_bool(val)
                     elif key == "TRAILING_STOP_ENABLED":
-                        config["trailing_stop_enabled"] = val.lower() == "true"
+                        config["trailing_stop_enabled"] = _parse_bool(val)
                     elif key == "TAKE_PROFIT_TIER1_PCT":
-                        config["profit_tier1_pct"] = float(val)
+                        config["profit_tier1_pct"] = _safe_float(val, config["profit_tier1_pct"], "TAKE_PROFIT_TIER1_PCT")
                     elif key == "TAKE_PROFIT_TIER2_PCT":
-                        config["profit_tier2_pct"] = float(val)
+                        config["profit_tier2_pct"] = _safe_float(val, config["profit_tier2_pct"], "TAKE_PROFIT_TIER2_PCT")
                     elif key == "TAKE_PROFIT_TIER3_PCT":
-                        config["profit_tier3_pct"] = float(val)
+                        config["profit_tier3_pct"] = _safe_float(val, config["profit_tier3_pct"], "TAKE_PROFIT_TIER3_PCT")
                     elif key == "PROFIT_TIER1_THRESHOLD":
-                        config["tier1_threshold"] = float(val)
+                        config["tier1_threshold"] = _safe_float(val, config["tier1_threshold"], "PROFIT_TIER1_THRESHOLD")
                     elif key == "PROFIT_TIER2_THRESHOLD":
-                        config["tier2_threshold"] = float(val)
+                        config["tier2_threshold"] = _safe_float(val, config["tier2_threshold"], "PROFIT_TIER2_THRESHOLD")
                     elif key == "TARGET_PROFIT":
-                        config["target_profit"] = float(val)
+                        config["target_profit"] = _safe_float(val, config["target_profit"], "TARGET_PROFIT")
                     elif key == "TARGET_DATE":
-                        config["target_date"] = val
+                        config["target_date"] = _clean_value(val)
     
     return config
 
