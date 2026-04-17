@@ -104,3 +104,55 @@
 - `live_eth_trader_v4.py` - Main trading bot
 - `versions/trader_v4.1_macd.py` - Archived version
 
+## v4.2 — 2026-04-17: Bollinger Bands + Trailing Stop + Dynamic Sizing
+
+### New Indicators
+- **Bollinger Bands** (period=20, std=2.0): Detect oversold/overbought conditions
+  - `%B < 0` (below lower band) = extra bullish confirmation for entries
+  - `%B > 1` (above upper band) = overbought exit signal
+  - Bandwidth tracking for volatility regime detection
+- **ATR** (period=14): Average True Range for volatility measurement
+- **Volume Ratio** (period=20): Compare current volume to moving average
+
+### New Features
+- **Dynamic Position Sizing**: ATR-based scaling — lower volatility = larger position
+  - Range: $20 (min) to $50 (max) USDT per trade
+  - Scale factor = 1.5 / atr_pct (inversely proportional to volatility)
+- **Trailing Stop**: Activates after +2% profit, follows price up with 1% trail distance
+  - Overrides fixed TP when active (lets winners run)
+  - State persisted across restarts (trailing_high, trailing_active)
+- **BB-Enhanced Entry**: RSI < 30 + BB below lower band + MACD > 0 triggers entry
+  even with neutral EMA (compensates for lagging indicator)
+- **BB Overbought Exit**: Price above upper BB + RSI > 70 = early profit exit
+- **Volume Confirmation**: Entry requires volume >= 1.0x average (configurable)
+
+### Improved Logging
+- Status line now shows: RSI | MACD | BB% | ATR | Volume | Signal
+- Entry signals explain all triggered indicators + dynamic size
+- No-entry logs show which conditions are missing (including BB and Volume)
+
+### Exit Priority (new order)
+1. Trailing stop (locks in profit above 2%)
+2. Fixed TP (safety net, unless trailing is active)
+3. Hard stop loss (always enforced)
+4. BB overbought + RSI overbought (+0.5% profit required)
+5. Bearish EMA crossover + RSI overbought (+0.5% profit required)
+
+### State Compatibility
+- Backward compatible with v4.1 state files
+- New fields (trailing_high, trailing_active) default to safe values
+- Raw klines stored for ATR calculation (auto-populated from API)
+
+### Config Constants Added
+```python
+BB_PERIOD = 20, BB_STD_DEV = 2.0
+ATR_PERIOD = 14
+VOLUME_MA_PERIOD = 20
+VOLUME_CONFIRM_ENABLED = True
+VOLUME_THRESHOLD = 1.0
+TRAILING_STOP_ENABLED = True
+TRAILING_ACTIVATION_PCT = 2.0
+TRAILING_DISTANCE_PCT = 1.0
+MIN_TRADE_AMOUNT = 20.0
+MAX_TRADE_AMOUNT = 50.0
+```

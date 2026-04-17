@@ -1,20 +1,31 @@
 #!/usr/bin/env python3
 """
-LIVE Multi-Pair Crypto Trader v5.2 — Trailing + Execution + Correlation Edition
+LIVE ETH-USDT Trading Bot v4.2 - Advanced Indicators + Trailing Stop Edition
 
-Upgrades from v5.1:
- 12. TRAILING STOPS — Ratchet profits up, lock in gains in trending markets
- 13. ORDER FILL VERIFICATION — Verify actual fill prices vs requested
- 14. CORRELATION TRACKING — Multi-asset correlation for diversification
- 15. PORTFOLIO DRAWDOWN — True peak-to-trough portfolio monitoring
+Upgrades from v4.1:
+  1. BOLLINGER BANDS — Volatility-based entry/exit confirmation
+     - BB(20,2) for dynamic overbought/oversold zones
+     - Price below lower band + RSI oversold = strong buy
+     - Price above upper band + RSI overbought = strong sell
+  2. ATR (Average True Range) — Dynamic position sizing
+     - ATR(14) measures volatility
+     - Smaller trades in high volatility, larger in low volatility
+     - Replaces fixed TRADE_AMOUNT with adaptive sizing
+  3. TRAILING STOP — Lock in profits dynamically
+     - Starts at 0.8% trailing after position reaches 1.5% profit
+     - Trailing distance widens as profit grows (volatility-aware)
+     - Replaces fixed TP exit for better upside capture
+  4. VOLUME CONFIRMATION — Filter low-volume signals
+     - Requires volume above 20-period moving average
+     - Prevents entries on weak/noise moves
 
-Upgrades from v5.0-4.0:
- 1-11. Multi-timeframe, Kelly, ATR stops, WebSocket, Position Sync, etc.
+Upgrades from v4.0:
+  - MACD(12/26/9) histogram confirmation for entries
 
-Inherits from v4:
- - Native HTTP client (requests library)
- - Environment-based credentials (.env)
- - TradingGuard safety wrapper
+Upgrades from v3:
+  - Native HTTP client (requests), env-based credentials
+  - RSI(14) + EMA(9/21) trend indicators
+  - TradingGuard: circuit breaker, daily loss limit, position sync
 """
 
 import json
@@ -31,30 +42,13 @@ from pathlib import Path
 import requests
 import numpy as np
 
-from indicators import AdvancedIndicators
-from strategy import ConfluenceEngine, RegimeSwitcher, TimeframeData, Signal
-from risk_manager import KellyCriterion, ATRStops, RiskManager, TrailingStopManager
 from trading_guard import TradingGuard, TradingHalt, CircuitOpen, DailyLossExceeded
-from position_sync import PositionSync
-from order_execution import OrderExecutor, OrderResult
-from correlation_tracker import CorrelationTracker
-from drawdown_tracker import DrawdownTracker
-
 
 # ─── Configuration from .env ────────────────────────────────────────────────
-def load_env(env_path=None):
-    """Load .env file into os.environ."""
-    if env_path is None:
-        # Resolve absolute path regardless of how script is invoked
-        _script_dir = os.path.dirname(os.path.abspath(__file__))
-        env_path = os.path.join(os.path.dirname(_script_dir), "config", ".env")
+def load_env(env_path="/root/.env"):
+    """Load .env file into os.environ (simple parser, no dependency needed)."""
     if not os.path.exists(env_path):
-        # Fallback: try /root/.env (standard bot deployment)
-        fallback = "/root/.env"
-        if os.path.exists(fallback):
-            env_path = fallback
-        else:
-            return
+        return
     with open(env_path) as f:
         for line in f:
             line = line.strip()
@@ -72,36 +66,55 @@ KUCOIN_API_KEY = os.environ.get("KUCOIN_API_KEY", "")
 KUCOIN_API_SECRET = os.environ.get("KUCOIN_API_SECRET", "")
 KUCOIN_PASSPHRASE = os.environ.get("KUCOIN_PASSPHRASE", "")
 
-# Trading parameters
-PAIR = os.environ.get("TRADING_PAIR", "ETH-USDT")
-EXTRA_PAIRS = os.environ.get("EXTRA_PAIRS", "").split(",") if os.environ.get("EXTRA_PAIRS") else []
-INITIAL_BALANCE = float(os.environ.get("INITIAL_BALANCE", "100"))
-MAX_RISK_PCT = float(os.environ.get("MAX_RISK_PER_TRADE_PCT", "2.0"))
-MAX_DAILY_LOSS_PCT = float(os.environ.get("MAX_DAILY_LOSS_PCT", "5.0"))
-MAX_DRAWDOWN_PCT = float(os.environ.get("MAX_DRAWDOWN_PCT", "15.0"))
+PAIR = "ETH-USDT"
+INITIAL_BALANCE = float(os.environ.get("INITIAL_BALANCE", "72.982119"))
+TRADE_AMOUNT = float(os.environ.get("TRADE_AMOUNT", "25.0"))
+TAKE_PROFIT_PCT = float(os.environ.get("TAKE_PROFIT_PCT", "2.5"))
+STOP_LOSS_PCT = float(os.environ.get("STOP_LOSS_PCT", "1.5"))
+STATE_FILE = "/root/trader_state.json"
+LOG_FILE = "/root/bot_v4.log"
 
-# Legacy overrides (used if set, otherwise computed from ATR)
-TAKE_PROFIT_PCT = float(os.environ.get("TAKE_PROFIT_PCT", "0"))   # 0 = use ATR
-STOP_LOSS_PCT = float(os.environ.get("STOP_LOSS_PCT", "0"))       # 0 = use ATR
+# RSI parameters
+RSI_PERIOD = 14
+RSI_OVERSOLD = 30       # Buy signal when RSI < this
+RSI_OVERBOUGHT = 70     # Sell signal when RSI > this
+EMA_FAST = 9
+EMA_SLOW = 21
+KLINE_INTERVAL = "1hour"  # 1h candles for trend analysis
+KLINE_LOOKBACK = 50       # Increased from 30 to support BB + ATR calculations
 
-# Paths
-STATE_FILE = os.environ.get("STATE_FILE", os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "trader_state.json"))
-LOG_FILE = os.environ.get("LOG_FILE", os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs", "bot.log"))
+# Bollinger Bands parameters (v4.2)
+BB_PERIOD = 20           # Standard BB period
+BB_STD_DEV = 2.0         # Standard deviations
 
-# Timeframes for multi-TF analysis
-TIMEFRAMES = {
-    "1hour": {"weight": 1.0, "label": "1H", "lookback": 30},
-    "4hour": {"weight": 1.5, "label": "4H", "lookback": 30},
-    "1day":  {"weight": 2.0, "label": "1D", "lookback": 50},
-}
+# ATR parameters (v4.2)
+ATR_PERIOD = 14          # ATR lookback period
+ATR_POSITION_SCALE = True # Use ATR for dynamic position sizing
 
-# Telegram
+# Trailing Stop parameters (v4.2)
+TRAILING_STOP_ENABLED = True
+TRAILING_ACTIVATION_PCT = 1.5   # Start trailing after 1.5% profit
+TRAILING_DISTANCE_PCT = 0.8     # Initial trailing distance
+TRAILING_STEP_PCT = 0.3         # Trailing tightens by this per step
+TRAILING_MIN_DISTANCE = 0.5     # Minimum trailing distance %
+TRAILING_MAX_DISTANCE = 3.0     # Maximum trailing distance %
+
+# Volume confirmation (v4.2)
+VOLUME_CONFIRM_ENABLED = True
+VOLUME_MA_PERIOD = 20           # Volume moving average period
+VOLUME_THRESHOLD = 1.0          # Must be >= 1.0x average volume
+
+# Dynamic position sizing (v4.2)
+MIN_TRADE_AMOUNT = 20.0         # Minimum trade in USDT
+MAX_TRADE_AMOUNT = 50.0         # Maximum trade in USDT (matches default TRADE_AMOUNT)
+
+# Telegram notifications
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
 
 class KucoinClient:
-    """Native HTTP client for KuCoin API with connection pooling."""
+    """Native HTTP client for KuCoin API — replaces subprocess+curl."""
 
     BASE_URL = "https://api.kucoin.com"
 
@@ -114,11 +127,12 @@ class KucoinClient:
             "Content-Type": "application/json",
             "KC-API-KEY-VERSION": "2",
         })
-        adapter = requests.adapters.HTTPAdapter(pool_connections=3, pool_maxsize=6)
+        # Connection pooling: reuse TCP connections
+        adapter = requests.adapters.HTTPAdapter(pool_connections=2, pool_maxsize=4)
         self.session.mount("https://", adapter)
 
     def _get_server_timestamp(self):
-        """Get KuCoin server timestamp with 30s cache."""
+        """Get KuCoin server timestamp. Caches for 30s to avoid extra API calls."""
         if (not hasattr(self, '_server_ts_cache')
                 or time.time() - self._server_ts_cache[0] > 30):
             try:
@@ -130,10 +144,12 @@ class KucoinClient:
             except Exception:
                 ts = int(time.time() * 1000)
                 self._server_ts_cache = (time.time(), ts)
+        # Adjust cached server time by elapsed time since last fetch
         elapsed_ms = int((time.time() - self._server_ts_cache[0]) * 1000)
         return self._server_ts_cache[1] + elapsed_ms
 
     def _headers(self, method, endpoint, body=""):
+        # Use server timestamp to avoid clock drift issues
         now = self._get_server_timestamp()
         str_to_sign = str(now) + method.upper() + endpoint + body
         signature = base64.b64encode(
@@ -157,12 +173,14 @@ class KucoinClient:
             "KC-API-PASSPHRASE": passphrase_sig,
         }
 
-    def get(self, endpoint, params=None, auth=False, timeout=10):
+    def get(self, endpoint, params=None, auth=True, timeout=10):
         url = self.BASE_URL + endpoint
+        # Build full endpoint with query string for signature
         sign_endpoint = endpoint
         if params:
             query = "&".join(f"{k}={v}" for k, v in params.items())
             sign_endpoint = f"{endpoint}?{query}"
+        # Use server timestamp for signature (avoid clock drift)
         headers = self._headers("GET", sign_endpoint) if auth else {}
         resp = self.session.get(url, params=params, headers=headers, timeout=timeout)
         data = resp.json()
@@ -185,21 +203,231 @@ class KucoinClient:
         return False, data.get("msg", data)
 
 
-class ConfluenceTrader:
-    """
-    Multi-timeframe confluence trader v5.0.
+class TechnicalIndicators:
+    """RSI, EMA, MACD calculations using numpy."""
 
-    Integrates:
-    - AdvancedIndicators: MACD, Bollinger, ATR, StochRSI, ADX, Ichimoku, Volume
-    - ConfluenceEngine: Weighted signal scoring across 1H/4H/1D
-    - RegimeSwitcher: Market-adaptive strategy parameters
-    - RiskManager: Kelly Criterion sizing, ATR stops, trailing stops
-    - TradingGuard: Circuit breaker, daily loss limit, position sync
-    """
+    @staticmethod
+    def compute_rsi(prices, period=14):
+        """Compute RSI from a price series. Returns latest RSI value."""
+        if len(prices) < period + 1:
+            return 50.0  # Neutral if not enough data
+        prices_arr = np.array(prices, dtype=float)
+        deltas = np.diff(prices_arr)
+        gains = np.where(deltas > 0, deltas, 0.0)
+        losses = np.where(deltas < 0, -deltas, 0.0)
+        avg_gain = np.mean(gains[:period])
+        avg_loss = np.mean(losses[:period])
+        for i in range(period, len(gains)):
+            avg_gain = (avg_gain * (period - 1) + gains[i]) / period
+            avg_loss = (avg_loss * (period - 1) + losses[i]) / period
+        if avg_loss == 0:
+            return 100.0
+        rs = avg_gain / avg_loss
+        rsi = 100.0 - (100.0 / (1.0 + rs))
+        return float(rsi)
+
+    @staticmethod
+    def compute_ema(prices, period=9):
+        """Compute EMA from price series. Returns latest EMA value."""
+        if len(prices) < period:
+            return float(np.mean(prices))
+        prices_arr = np.array(prices, dtype=float)
+        multiplier = 2.0 / (period + 1)
+        ema = float(np.mean(prices_arr[:period]))
+        for price in prices_arr[period:]:
+            ema = (price - ema) * multiplier + ema
+        return float(ema)
+
+    @staticmethod
+    def compute_macd(prices, fast=12, slow=26, signal=9):
+        """
+        Compute MACD line, signal line, and histogram.
+        Returns: (macd_line, signal_line, histogram)
+        """
+        if len(prices) < slow + signal:
+            return 0.0, 0.0, 0.0
+
+        prices_arr = np.array(prices, dtype=float)
+
+        # Compute fast and slow EMAs
+        mult_fast = 2.0 / (fast + 1)
+        mult_slow = 2.0 / (slow + 1)
+
+        ema_fast = np.empty_like(prices_arr)
+        ema_slow = np.empty_like(prices_arr)
+        ema_fast[0] = prices_arr[0]
+        ema_slow[0] = prices_arr[0]
+
+        for i in range(1, len(prices_arr)):
+            ema_fast[i] = (prices_arr[i] - ema_fast[i-1]) * mult_fast + ema_fast[i-1]
+            ema_slow[i] = (prices_arr[i] - ema_slow[i-1]) * mult_slow + ema_slow[i-1]
+
+        macd_line_arr = ema_fast - ema_slow
+
+        # Signal line is EMA of MACD line
+        if len(macd_line_arr) < signal:
+            return float(macd_line_arr[-1]), 0.0, float(macd_line_arr[-1])
+
+        mult_sig = 2.0 / (signal + 1)
+        signal_arr = np.empty_like(macd_line_arr)
+        signal_arr[:signal] = macd_line_arr[:signal]
+        signal_arr[signal-1] = np.mean(macd_line_arr[:signal])
+
+        for i in range(signal, len(macd_line_arr)):
+            signal_arr[i] = (macd_line_arr[i] - signal_arr[i-1]) * mult_sig + signal_arr[i-1]
+
+        macd_val = float(macd_line_arr[-1])
+        signal_val = float(signal_arr[-1])
+        histogram = macd_val - signal_val
+
+        return macd_val, signal_val, histogram
+
+    @staticmethod
+    def compute_bollinger_bands(prices, period=20, num_std=2.0):
+        """
+        Compute Bollinger Bands.
+        Returns: (middle, upper, lower, bandwidth, percent_b)
+          - middle: SMA(period)
+          - upper: middle + num_std * stdev
+          - lower: middle - num_std * stdev
+          - bandwidth: (upper - lower) / middle * 100
+          - percent_b: (price - lower) / (upper - lower) [0-1 range, <0 below lower, >1 above upper]
+        """
+        if len(prices) < period:
+            price = prices[-1] if prices else 0
+            return price, price, price, 0.0, 0.5
+
+        prices_arr = np.array(prices, dtype=float)
+        recent = prices_arr[-period:]
+        middle = float(np.mean(recent))
+        std = float(np.std(recent, ddof=1))
+        upper = middle + num_std * std
+        lower = middle - num_std * std
+        bandwidth = ((upper - lower) / middle * 100) if middle > 0 else 0.0
+
+        current_price = float(prices_arr[-1])
+        if upper != lower:
+            percent_b = (current_price - lower) / (upper - lower)
+        else:
+            percent_b = 0.5
+
+        return middle, upper, lower, bandwidth, percent_b
+
+    @staticmethod
+    def compute_atr(klines_data, period=14):
+        """
+        Compute Average True Range from kline data.
+        klines_data: list of [timestamp, open, close, high, low, volume, amount]
+        Returns: ATR value
+        """
+        if len(klines_data) < period + 1:
+            return 0.0
+
+        true_ranges = []
+        for i in range(1, len(klines_data)):
+            high = float(klines_data[i][3])
+            low = float(klines_data[i][4])
+            prev_close = float(klines_data[i-1][2])
+            tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
+            true_ranges.append(tr)
+
+        if len(true_ranges) < period:
+            return float(np.mean(true_ranges)) if true_ranges else 0.0
+
+        # Use EMA-style ATR calculation (Wilder's method)
+        atr = np.mean(true_ranges[:period])
+        for i in range(period, len(true_ranges)):
+            atr = (atr * (period - 1) + true_ranges[i]) / period
+
+        return float(atr)
+
+    @staticmethod
+    def compute_volume_ratio(volumes, period=20):
+        """
+        Compute current volume relative to moving average.
+        Returns ratio: current_volume / avg_volume (e.g., 1.5 = 50% above average)
+        """
+        if len(volumes) < period:
+            return 1.0  # Neutral if not enough data
+
+        vol_arr = np.array(volumes[-period:], dtype=float)
+        avg_vol = float(np.mean(vol_arr))
+        current_vol = float(volumes[-1])
+
+        if avg_vol > 0:
+            return current_vol / avg_vol
+        return 1.0
+
+    @staticmethod
+    def trend_signal(prices):
+        """
+        Returns (signal, rsi, ema_fast, ema_slow, macd_histogram):
+          signal: 'bullish', 'bearish', or 'neutral'
+        """
+        rsi = TechnicalIndicators.compute_rsi(prices, RSI_PERIOD)
+        ema_fast = TechnicalIndicators.compute_ema(prices, EMA_FAST)
+        ema_slow = TechnicalIndicators.compute_ema(prices, EMA_SLOW)
+        macd_line, macd_signal, macd_histogram = TechnicalIndicators.compute_macd(prices)
+
+        if ema_fast > ema_slow and rsi < RSI_OVERBOUGHT:
+            signal = "bullish"
+        elif ema_fast < ema_slow and rsi > RSI_OVERSOLD:
+            signal = "bearish"
+        else:
+            signal = "neutral"
+        return signal, rsi, ema_fast, ema_slow, macd_histogram
+
+    @staticmethod
+    def full_analysis(prices, klines_data=None):
+        """
+        v4.2: Comprehensive analysis with all indicators.
+        Returns dict with all indicator values for decision-making.
+        """
+        signal, rsi, ema_fast, ema_slow, macd_histogram = TechnicalIndicators.trend_signal(prices)
+
+        bb_middle, bb_upper, bb_lower, bb_bandwidth, bb_percent_b = \
+            TechnicalIndicators.compute_bollinger_bands(prices, BB_PERIOD, BB_STD_DEV)
+
+        atr = 0.0
+        if klines_data:
+            atr = TechnicalIndicators.compute_atr(klines_data, ATR_PERIOD)
+
+        volume_ratio = 1.0
+        if klines_data and len(klines_data) > 1:
+            volumes = [float(k[5]) for k in klines_data]
+            volume_ratio = TechnicalIndicators.compute_volume_ratio(volumes, VOLUME_MA_PERIOD)
+
+        current_price = prices[-1] if prices else 0
+
+        # BB-based signal enhancements
+        bb_oversold = bb_percent_b < 0.0    # Price below lower band
+        bb_overbought = bb_percent_b > 1.0  # Price above upper band
+
+        return {
+            "signal": signal,
+            "rsi": rsi,
+            "ema_fast": ema_fast,
+            "ema_slow": ema_slow,
+            "macd_histogram": macd_histogram,
+            "bb_middle": bb_middle,
+            "bb_upper": bb_upper,
+            "bb_lower": bb_lower,
+            "bb_bandwidth": bb_bandwidth,
+            "bb_percent_b": bb_percent_b,
+            "bb_oversold": bb_oversold,
+            "bb_overbought": bb_overbought,
+            "atr": atr,
+            "volume_ratio": volume_ratio,
+            "price": current_price,
+        }
+
+
+class SmartTrader:
+    """ETH-USDT Trader v4.2 with advanced indicators and trailing stop."""
 
     def __init__(self):
         if not KUCOIN_API_KEY or not KUCOIN_API_SECRET:
-            print("FATAL: KUCOIN_API_KEY and KUCOIN_API_SECRET must be set in config/.env")
+            print("FATAL: KUCOIN_API_KEY and KUCOIN_API_SECRET must be set in /root/.env")
             sys.exit(1)
 
         self.client = KucoinClient(KUCOIN_API_KEY, KUCOIN_API_SECRET, KUCOIN_PASSPHRASE)
@@ -207,42 +435,18 @@ class ConfluenceTrader:
         self.trades_executed = 0
         self.total_pnl = 0.0
         self.running = True
-        self.peak_balance = INITIAL_BALANCE
-
-        # Modules
-        self.confluence = ConfluenceEngine()
-        self.regime_switcher = RegimeSwitcher()
-        self.risk_mgr = RiskManager(
-            balance=INITIAL_BALANCE,
-            max_risk_per_trade_pct=MAX_RISK_PCT,
-            max_daily_loss_pct=MAX_DAILY_LOSS_PCT,
-            max_portfolio_drawdown_pct=MAX_DRAWDOWN_PCT,
-            max_open_positions=1,
-        )
-        
-        # Smart order execution with fill verification
-        self.order_executor = OrderExecutor(
-            self.client,
-            PAIR,
-            max_slippage_bps=50,  # 0.5%
-        )
-        
-        # Correlation tracking for multi-pair diversification
-        self.correlation_tracker = CorrelationTracker(
-            [PAIR] + EXTRA_PAIRS,
-            window=100,
-        )
-        
-        # Portfolio drawdown tracking
-        self.drawdown_tracker = DrawdownTracker(max_points=10000)
+        self.price_history = []  # Cached closes for indicators
+        self.klines_raw = []     # Raw kline data for ATR + volume (v4.2)
+        self.trailing_high = 0.0  # Track highest price since entry (v4.2)
+        self.trailing_active = False  # Whether trailing stop is active (v4.2)
 
         self.guard = TradingGuard(
-            pid_file=os.environ.get("PID_FILE", os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "bot.pid")),
+            pid_file="/root/bot.pid",
             log_file=LOG_FILE,
             state_file=STATE_FILE,
-            guard_state_file=os.environ.get("GUARD_STATE_FILE", os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "guard_state.json")),
-            max_daily_loss=MAX_DAILY_LOSS_PCT,
-            max_hold_hours=8.0,
+            guard_state_file="/root/guard_state.json",
+            max_daily_loss=5.0,
+            max_hold_hours=4.0,
             max_consecutive_fails=5,
             max_log_size_mb=5.0,
             api_rate_limit_sec=1.0,
@@ -250,20 +454,8 @@ class ConfluenceTrader:
             max_trades_per_hour=10,
         )
 
-        # Cached data per timeframe
-        self.candle_cache = {} # timeframe -> {closes, highs, lows, volumes, last_fetch}
-        
-        # Position sync for reconciliation with actual account
-        self.position_sync = PositionSync(PAIR, STATE_FILE)
-
         self.load_state()
-        
-        # Sync position with actual account (v4 -> v5 upgrade, external trades, etc)
-        self._sync_position()
-        
-        self._prefetch_candles()
-
-    # ─── State Management ──────────────────────────────────────────────
+        self._fetch_price_history()
 
     def load_state(self):
         try:
@@ -273,22 +465,23 @@ class ConfluenceTrader:
                     self.position = state.get("position")
                     self.trades_executed = state.get("trades", 0)
                     self.total_pnl = state.get("pnl", 0.0)
-                    self.peak_balance = state.get("peak_balance", INITIAL_BALANCE)
+                    # v4.2: Restore trailing stop state
+                    self.trailing_high = state.get("trailing_high", 0.0)
+                    self.trailing_active = state.get("trailing_active", False)
                     self.log("State restored from previous session", "INFO")
         except Exception as e:
             self.log(f"Could not load state: {e}", "WARN")
 
     def save_state(self, include_balance=False):
         try:
-            os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
             with open(STATE_FILE, "w") as f:
                 json.dump({
                     "position": self.position,
                     "trades": self.trades_executed,
                     "pnl": self.total_pnl,
-                    "peak_balance": self.peak_balance,
                     "timestamp": datetime.now().isoformat(),
-                    "version": "5.0",
+                    "trailing_high": self.trailing_high,
+                    "trailing_active": self.trailing_active,
                 }, f)
             if include_balance:
                 self.save_dashboard_state()
@@ -299,30 +492,21 @@ class ConfluenceTrader:
         try:
             balance = self.get_balance()
             current_price = self.get_price() or 0
-            eth_bal = balance.get("ETH", 0)
-            usdt_bal = balance.get("USDT", 0)
-            total = usdt_bal + eth_bal * current_price
-
             state = {
                 "connected": True,
                 "pair": PAIR,
-                "balance_usdt": usdt_bal,
-                "balance_eth": eth_bal,
-                "total_balance": total,
+                "balance_usdt": balance.get("USDT", 0),
+                "balance_eth": balance.get("ETH", 0),
+                "total_balance": balance.get("USDT", 0) + (balance.get("ETH", 0) * current_price),
                 "current_price": current_price,
                 "total_pnl": self.total_pnl,
                 "trades_today": self.trades_executed,
                 "position": self.position,
                 "last_update": datetime.now().isoformat(),
                 "bot_status": "active" if self.running else "stopped",
-                "version": "5.0",
                 "guard": self.guard.get_status(),
-                "risk": self.risk_mgr.get_status(),
             }
-            dashboard_path = os.environ.get("DASHBOARD_STATE",
-                os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "bot_state.json"))
-            os.makedirs(os.path.dirname(dashboard_path), exist_ok=True)
-            with open(dashboard_path, "w") as f:
+            with open("/root/bot_state.json", "w") as f:
                 json.dump(state, f)
         except Exception as e:
             self.log(f"Dashboard state save failed: {e}", "WARN")
@@ -332,27 +516,31 @@ class ConfluenceTrader:
         icons = {
             "INFO": "[i]", "BUY": "[BUY]", "SELL": "[SELL]", "PROFIT": "[PROFIT]",
             "LOSS": "[LOSS]", "ALERT": "[!!]", "WARN": "[WARN]", "OK": "[OK]",
-            "GUARD": "[GUARD]", "SIGNAL": "[SIG]", "RISK": "[RISK]",
-            "REGIME": "[REG]", "CONFLUENCE": "[CONF]"
+            "GUARD": "[GUARD]", "SIGNAL": "[SIG]"
         }
         icon = icons.get(level, "[-]")
         log_line = f"{icon} [{ts}] {message}"
+        # Single write path: write directly to file
+        # stdout redirect also captures print(), but we avoid duplication
+        # by only using explicit file write
         try:
-            os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
             with open(LOG_FILE, "a") as f:
                 f.write(log_line + "\n")
         except:
             pass
+        # Print to console only if NOT redirected (interactive mode)
         if sys.stdout.isatty():
             try:
                 print(log_line, flush=True)
             except UnicodeEncodeError:
                 pass
 
+        # Send important events to Telegram
         if level in ["BUY", "SELL", "PROFIT", "LOSS", "ALERT"]:
             self._telegram_notify(f"{icons.get(level, '')} {message}")
 
     def _telegram_notify(self, text):
+        """Send notification to Telegram."""
         if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
             return
         try:
@@ -362,12 +550,12 @@ class ConfluenceTrader:
                 timeout=5
             )
         except:
-            pass
+            pass  # Non-critical — don't break the bot
 
-    # ─── API Methods ───────────────────────────────────────────────────
+    # ─── API Methods (native requests — no subprocess!) ─────────────────
 
     def get_price(self):
-        """Get current pair price."""
+        """Get current ETH price. ~50ms vs ~300ms with curl."""
         try:
             success, data = self.client.get(
                 "/api/v1/market/orderbook/level1",
@@ -380,17 +568,16 @@ class ConfluenceTrader:
                     self.guard.record_success()
                     return price
             self.guard.record_failure()
-        except Exception:
+        except Exception as e:
             self.guard.record_failure()
         return None
 
     def get_balance(self):
         """Get trade account balances."""
         try:
-            success, data = self.client.get("/api/v1/accounts", params={"type": "trade"}, auth=True)
+            success, data = self.client.get("/api/v1/accounts", params={"type": "trade"})
             if success:
-                currencies = PAIR.split("-")
-                balances = {c: 0.0 for c in currencies}
+                balances = {"ETH": 0.0, "USDT": 0.0}
                 for acc in data:
                     if acc["currency"] in balances:
                         balances[acc["currency"]] = float(acc.get("available", 0))
@@ -399,7 +586,7 @@ class ConfluenceTrader:
             self.guard.record_failure()
         except Exception:
             self.guard.record_failure()
-        return {c: 0.0 for c in PAIR.split("-")}
+        return {"ETH": 0.0, "USDT": 0.0}
 
     def place_order(self, side, amount):
         """Place market order."""
@@ -407,7 +594,7 @@ class ConfluenceTrader:
             "symbol": PAIR,
             "side": side,
             "type": "market",
-            "clientOid": f"v5_{int(time.time() * 1000)}"
+            "clientOid": f"v4_{int(time.time() * 1000)}"
         }
         if side == "buy":
             body["funds"] = str(amount)
@@ -427,123 +614,145 @@ class ConfluenceTrader:
             self.guard.record_failure()
             return False, str(e)
 
-    # ─── Multi-Timeframe Candle Fetching ───────────────────────────────
+    # ─── Technical Analysis ─────────────────────────────────────────────
 
-    def _prefetch_candles(self):
-        """Fetch candles for all timeframes on startup."""
-        for tf_key in TIMEFRAMES:
-            self._fetch_candles(tf_key)
-        self.log(f"Prefetched candles for {len(TIMEFRAMES)} timeframes", "INFO")
-
-    def _fetch_candles(self, timeframe):
-        """Fetch OHLCV candles for a given timeframe."""
-        tf_config = TIMEFRAMES.get(timeframe)
-        if not tf_config:
-            return
-
+    def _fetch_price_history(self):
+        """Fetch recent klines for indicator calculation."""
         try:
             success, data = self.client.get(
                 "/api/v1/market/candles",
-                params={"symbol": PAIR, "type": timeframe},
+                params={"symbol": PAIR, "type": KLINE_INTERVAL},
                 auth=False
             )
             if success and data:
-                # KuCoin: [timestamp, open, close, high, low, volume, amount]
-                # Sorted newest-first, we reverse to chronological
-                candles = list(reversed(data[-tf_config["lookback"]:]))
-                closes = [float(c[2]) for c in candles]
-                highs = [float(c[3]) for c in candles]
-                lows = [float(c[4]) for c in candles]
-                volumes = [float(c[5]) for c in candles]
-
-                self.candle_cache[timeframe] = {
-                    "closes": closes,
-                    "highs": highs,
-                    "lows": lows,
-                    "volumes": volumes,
-                    "last_fetch": time.time(),
-                }
+                # KuCoin returns [timestamp, open, close, high, low, volume, amount]
+                # Sorted newest-first
+                recent = data[-KLINE_LOOKBACK:]
+                closes = [float(candle[2]) for candle in reversed(recent)]
+                self.price_history = closes
+                self.klines_raw = list(reversed(recent))  # Oldest-first for ATR
+                self.log(f"Loaded {len(closes)} candles for analysis", "INFO")
             else:
-                self.log(f"Candle fetch failed for {timeframe}", "WARN")
+                self.price_history = []
+                self.klines_raw = []
         except Exception as e:
-            self.log(f"Candle fetch error ({timeframe}): {e}", "WARN")
+            self.log(f"Kline fetch failed: {e}", "WARN")
+            self.price_history = []
+            self.klines_raw = []
 
-    def _sync_position(self):
-        """Sync internal position tracking with actual KuCoin account."""
-        try:
-            self.log("Syncing position with account...", "INFO")
-            old_position = self.position
-            self.position = self.position_sync.sync(self.client, self.position)
-            
-            if self.position and not old_position:
-                self.log(f"[SYNC] Imported position: {self.position['amount']:.6f} @ ${self.position.get('entry', 0):.2f}", "GUARD")
-            elif not self.position and old_position:
-                self.log("[SYNC] Position was closed externally", "GUARD")
-            elif self.position and old_position:
-                if abs(self.position['amount'] - old_position.get('amount', 0)) > 0.0001:
-                    self.log(f"[SYNC] Position size updated: {old_position.get('amount', 0):.6f} -> {self.position['amount']:.6f}", "INFO")
-            else:
-                self.log("Position sync: no changes", "INFO")
-                
-            # Save synced state
-            self.position_sync.save_synced_state(self.position, self.total_pnl, self.trades_executed)
-            
-        except Exception as e:
-            self.log(f"Position sync error: {e}", "WARN")
+    def _update_indicators(self, price):
+        """Append latest price to history, compute all indicators (v4.2)."""
+        self.price_history.append(price)
+        # Keep only what we need
+        if len(self.price_history) > KLINE_LOOKBACK * 2:
+            self.price_history = self.price_history[-KLINE_LOOKBACK:]
 
-    def _refresh_candles_if_stale(self, timeframe, max_age=1800):
-        """Refresh candles if older than max_age seconds."""
-        cache = self.candle_cache.get(timeframe, {})
-        if time.time() - cache.get("last_fetch", 0) >= max_age:
-            self._fetch_candles(timeframe)
+        if len(self.price_history) < EMA_SLOW + 1:
+            return {
+                "signal": "neutral", "rsi": 50.0,
+                "ema_fast": price, "ema_slow": price,
+                "macd_histogram": 0.0,
+                "bb_middle": price, "bb_upper": price, "bb_lower": price,
+                "bb_bandwidth": 0.0, "bb_percent_b": 0.5,
+                "bb_oversold": False, "bb_overbought": False,
+                "atr": 0.0, "volume_ratio": 1.0, "price": price,
+            }
 
-    # ─── Multi-Timeframe Analysis ──────────────────────────────────────
+        analysis = TechnicalIndicators.full_analysis(self.price_history, self.klines_raw)
+        return analysis
 
-    def _compute_timeframe_data(self, current_price=None):
+    # ─── Order Execution ────────────────────────────────────────────────
+
+    def _calculate_trade_amount(self, analysis):
         """
-        Build TimeframeData for each timeframe with full indicator suite.
-        Returns list of TimeframeData objects.
+        v4.2: Dynamic position sizing based on ATR (volatility).
+        - Low volatility → larger position (up to MAX_TRADE_AMOUNT)
+        - High volatility → smaller position (down to MIN_TRADE_AMOUNT)
         """
-        timeframe_data_list = []
+        if not ATR_POSITION_SCALE or analysis.get("atr", 0) == 0:
+            return TRADE_AMOUNT
 
-        for tf_key, tf_config in TIMEFRAMES.items():
-            cache = self.candle_cache.get(tf_key, {})
-            closes = cache.get("closes", [])
-            highs = cache.get("highs", [])
-            lows = cache.get("lows", [])
-            volumes = cache.get("volumes", [])
+        atr = analysis["atr"]
+        price = analysis["price"]
+        if price <= 0:
+            return TRADE_AMOUNT
 
-            if len(closes) < 20:
-                continue
+        # ATR as percentage of price
+        atr_pct = (atr / price) * 100
 
-            # Append latest price to closes for real-time indicator update
-            if current_price and len(closes) > 0:
-                closes = closes + [current_price]
-                highs = highs + [max(current_price, highs[-1] if highs else current_price)]
-                lows = lows + [min(current_price, lows[-1] if lows else current_price)]
-                volumes = volumes + [0]  # placeholder volume for current candle
+        # Baseline: at ~1.5% ATR, use default TRADE_AMOUNT
+        # Scale inversely: lower ATR = larger trade, higher ATR = smaller trade
+        if atr_pct <= 0:
+            return TRADE_AMOUNT
 
-            # Run full indicator suite
-            indicators = AdvancedIndicators.compute_all(highs, lows, closes, volumes)
-            indicators["price"] = current_price
-            indicators["timeframe"] = tf_key
+        scale_factor = min(max(1.5 / atr_pct, 0.5), 2.0)
+        amount = TRADE_AMOUNT * scale_factor
 
-            timeframe_data_list.append(TimeframeData(
-                timeframe=tf_config["label"],
-                indicators=indicators,
-                weight=tf_config["weight"],
-            ))
+        # Clamp to min/max
+        amount = max(MIN_TRADE_AMOUNT, min(MAX_TRADE_AMOUNT, amount))
+        return round(amount, 2)
 
-        return timeframe_data_list
+    def _check_trailing_stop(self, price, current_pnl_pct):
+        """
+        v4.2: Trailing stop logic.
+        Returns (should_exit, reason) tuple.
+        """
+        if not TRAILING_STOP_ENABLED:
+            return False, ""
 
-    # ─── Order Execution ───────────────────────────────────────────────
+        if not self.position or not self.position.get("entry"):
+            return False, ""
+
+        entry = self.position["entry"]
+
+        # Update trailing high
+        if price > self.trailing_high:
+            self.trailing_high = price
+
+        # Activate trailing after position reaches activation threshold
+        if not self.trailing_active:
+            if current_pnl_pct >= TRAILING_ACTIVATION_PCT:
+                self.trailing_active = True
+                self.trailing_high = price
+                self.log(
+                    f"TRAILING STOP ACTIVATED at +{current_pnl_pct:.2f}% "
+                    f"(trailing from ${price:.2f})",
+                    "SIGNAL"
+                )
+            return False, ""
+
+        # Trailing is active — calculate trailing distance
+        # Dynamic: tighter for small profits, wider for large profits
+        profit_pct = ((self.trailing_high - entry) / entry) * 100
+
+        # Trailing distance scales with profit
+        trail_distance = min(
+            TRAILING_DISTANCE_PCT + (profit_pct - TRAILING_ACTIVATION_PCT) * TRAILING_STEP_PCT,
+            TRAILING_MAX_DISTANCE
+        )
+        trail_distance = max(trail_distance, TRAILING_MIN_DISTANCE)
+
+        # Calculate trailing stop price
+        trailing_stop_price = self.trailing_high * (1 - trail_distance / 100)
+
+        if price <= trailing_stop_price:
+            # Calculate actual PnL at exit
+            exit_pnl = ((price - entry) / entry) * 100
+            reason = (
+                f"Trailing stop hit: ${price:.2f} <= ${trailing_stop_price:.2f} "
+                f"(trail dist: {trail_distance:.1f}%, peak: ${self.trailing_high:.2f})"
+            )
+            return True, reason
+
+        return False, ""
 
     def _execute_exit(self, reason, current_pnl_pct, unrealized):
-        """Execute position exit with guard checks and fallback."""
+        """Safely execute a position exit with retries and guard checks."""
         try:
             self.guard.pre_trade_check("sell", self.position["amount"])
         except (DailyLossExceeded, TradingHalt) as e:
             self.log(f"GUARD BLOCKED EXIT: {e}", "GUARD")
+            # Still try to exit — loss limit means we NEED out
 
         amount = self.position["amount"]
         is_loss = unrealized < 0
@@ -556,9 +765,11 @@ class ConfluenceTrader:
             else:
                 self.total_pnl += profit
             self.trades_executed += 1
-            self.risk_mgr.update_after_trade(profit)
             self.guard.record_trade("sell", pnl=profit, success=True)
             self.position = None
+            # Reset trailing stop state
+            self.trailing_high = 0.0
+            self.trailing_active = False
             self.save_state(include_balance=True)
 
             if is_loss:
@@ -568,7 +779,7 @@ class ConfluenceTrader:
             self.log(f"Total Trades: {self.trades_executed} | P&L: ${self.total_pnl:+.2f}", "INFO")
             return True
 
-        # Fallback: sell by funds value
+        # Fallback: sell by USDT funds value
         self.log(f"Sell by size failed: {result}. Trying funds fallback...", "WARN")
         price = self.get_price()
         if price:
@@ -581,53 +792,54 @@ class ConfluenceTrader:
                 else:
                     self.total_pnl += profit
                 self.trades_executed += 1
-                self.risk_mgr.update_after_trade(profit)
                 self.guard.record_trade("sell", pnl=profit, success=True)
                 self.position = None
                 self.save_state(include_balance=True)
                 return True
 
         self.guard.record_failure()
-        self.log(f"CRITICAL: Both sell attempts failed!", "ALERT")
+        self.log(f"CRITICAL: Both sell attempts failed! {result} | {result2 if not success else ''}", "ALERT")
         return False
 
-    # ─── Main Trading Loop ─────────────────────────────────────────────
+    # ─── Main Trading Loop ──────────────────────────────────────────────
 
     def run(self):
         self.guard.acquire_lock()
 
         self.log("=" * 60, "INFO")
-        self.log("CONFLUENCE TRADER v5.2 (Trailing + Execution + Correlation)", "OK")
+        self.log("SMART ETH-USDT TRADER v4.2 (RSI+EMA+MACD+BB+ATR+Trailing)", "OK")
         self.log("=" * 60, "INFO")
         self.log(
-            f"Pair: {PAIR} | Risk: {MAX_RISK_PCT}%/trade | "
-            f"Daily Limit: {MAX_DAILY_LOSS_PCT}% | MaxDD: {MAX_DRAWDOWN_PCT}%",
-            "INFO"
+            f"Balance: ${INITIAL_BALANCE:.2f} | Trade: ${TRADE_AMOUNT} | "
+            f"TP:{TAKE_PROFIT_PCT}% SL:{STOP_LOSS_PCT}%", "INFO"
         )
         self.log(
-            f"Timeframes: {', '.join(t['label'] for t in TIMEFRAMES.values())} | "
-            f"Indicators: RSI, MACD, BB, ATR, StochRSI, ADX, Ichimoku, Volume",
-            "SIGNAL"
+            f"Indicators: RSI({RSI_PERIOD}) {RSI_OVERSOLD}/{RSI_OVERBOUGHT} | "
+            f"EMA({EMA_FAST}/{EMA_SLOW}) | MACD(12/26/9) | BB({BB_PERIOD},{BB_STD_DEV}) | "
+            f"ATR({ATR_PERIOD}) | Trailing:{TRAILING_STOP_ENABLED}", "SIGNAL"
         )
         self.log(self.guard.format_status(), "GUARD")
 
         if self.position:
             self.log(
-                f"RESUMED: {self.position['amount']:.6f} @ ${self.position.get('entry', 0):.2f}",
+                f"RESUMED: Open position {self.position['amount']:.6f} ETH @ ${self.position.get('entry', 0):.2f}",
                 "INFO"
             )
 
         cycle = 0
         last_status_time = 0
         last_sync_time = 0
+        last_balance_save = 0
         last_dashboard_save = 0
+        last_kline_refresh = 0
+        last_signal_log = 0
 
         try:
             while self.running:
                 try:
                     loop_start = time.time()
 
-                    # ── Price ──
+                    # ── Price + Indicators ──
                     price = self.get_price()
                     self.guard.check_health(price=price, position=self.position)
 
@@ -636,38 +848,33 @@ class ConfluenceTrader:
                         time.sleep(10)
                         continue
 
-                    # ── Refresh candles (1H every 30m, 4H every 2h, 1D every 8h) ──
-                    self._refresh_candles_if_stale("1hour", max_age=1800)
-                    self._refresh_candles_if_stale("4hour", max_age=7200)
-                    self._refresh_candles_if_stale("1day", max_age=28800)
+                    analysis = self._update_indicators(price)
+                    signal = analysis["signal"]
+                    rsi = analysis["rsi"]
+                    ema_fast = analysis["ema_fast"]
+                    ema_slow = analysis["ema_slow"]
+                    macd_histogram = analysis["macd_histogram"]
+                    bb_percent_b = analysis["bb_percent_b"]
+                    bb_oversold = analysis["bb_oversold"]
+                    bb_overbought = analysis["bb_overbought"]
+                    bb_lower = analysis["bb_lower"]
+                    bb_upper = analysis["bb_upper"]
+                    bb_bandwidth = analysis["bb_bandwidth"]
+                    atr = analysis["atr"]
+                    volume_ratio = analysis["volume_ratio"]
 
-                    # ── Multi-timeframe analysis ──
-                    tf_data = self._compute_timeframe_data(price)
-
-                    # ── Confluence signal ──
-                    signal_result = self.confluence.generate_signal(tf_data)
-
-                    # ── Regime detection ──
-                    regime = self.regime_switcher.detect_regime(tf_data)
-                    regime_params = self.regime_switcher.get_strategy_params(regime)
-
-                    # Extract key indicators for display
-                    rsi = 50.0
-                    atr = 0.0
-                    for tf in tf_data:
-                        if tf.timeframe == "1H":
-                            rsi = tf.indicators.get("rsi", 50.0)
-                            atr = tf.indicators.get("atr", 0.0)
-                            break
+                    # Refresh klines every 30 min (don't hammer API)
+                    if time.time() - last_kline_refresh >= 1800:
+                        self._fetch_price_history()
+                        last_kline_refresh = time.time()
 
                     # ── Periodic position sync (every 5 min) ──
                     if time.time() - last_sync_time >= 300:
                         balances = self.get_balance()
-                        base_currency = PAIR.split("-")[0]
                         synced = self.guard.sync_position(
                             self.position,
-                            balances.get(base_currency, 0),
-                            0,  # amount checked by guard differently
+                            balances.get("ETH", 0),
+                            TRADE_AMOUNT,
                             price=price
                         )
                         if synced != self.position:
@@ -677,130 +884,124 @@ class ConfluenceTrader:
                             self.save_state()
                         last_sync_time = time.time()
 
-                    # ── Balance check ──
-                    balances = self.get_balance() if cycle % 6 == 0 else \
-                        {PAIR.split("-")[0]: self.position["amount"] if self.position else 0.0,
-                         PAIR.split("-")[1]: 0.0}
+                    # Get balance (only every 60s)
+                    if time.time() - last_balance_save >= 60:
+                        balances = self.get_balance()
+                        last_balance_save = time.time()
+                    else:
+                        balances = {"ETH": self.position["amount"] if self.position else 0.0, "USDT": 0.0}
 
-                    base_currency = PAIR.split("-")[0]
-                    quote_currency = PAIR.split("-")[1]
-                    base_value = balances.get(base_currency, 0) * price
-                    total = balances.get(quote_currency, 0) + base_value
+                    eth_value = balances.get("ETH", 0) * price
+                    total = balances.get("USDT", 0) + eth_value
                     pnl = total - INITIAL_BALANCE
 
-                    # Update peak balance
-                    if total > self.peak_balance:
-                        self.peak_balance = total
-
-                    # ── Status log (every 60s) ──
+                    # Status every 60s
                     if time.time() - last_status_time >= 60:
+                        macd_str = f"MACD:{macd_histogram:+.2f}" if macd_histogram != 0 else "MACD:--"
+                        bb_str = f"BB%:{bb_percent_b:.2f}" if bb_bandwidth > 0 else "BB:--"
+                        atr_str = f"ATR:{atr:.1f}" if atr > 0 else "ATR:--"
+                        vol_str = f"Vol:{volume_ratio:.1f}x" if volume_ratio != 1.0 else "Vol:--"
                         self.log(
-                            f"Balance: ${total:.2f} | {base_currency}: ${price:.2f} | "
-                            f"P&L: ${pnl:+.2f} | RSI: {rsi:.1f} | "
-                            f"Regime: {regime} | Signal: {signal_result.action.name}",
+                            f"Balance: ${total:.2f} | ETH: ${price:.2f} | "
+                            f"P&L: ${pnl:+.2f} | RSI: {rsi:.1f} | {macd_str} | "
+                            f"{bb_str} | {atr_str} | {vol_str} | {signal.upper()}",
                             "INFO"
                         )
                         last_status_time = time.time()
 
-                    # ── TRADING LOGIC ──
+                    # ── SMART TRADING LOGIC ──
 
                     if not self.position:
-                        # ═══ NO POSITION — Look for entry ═══
+                        # NO POSITION — Wait for smart entry signal
+                        # v4.2: Added Bollinger Bands + Volume confirmation + Dynamic sizing
+                        macd_confirmed = macd_histogram > 0
 
-                        # Skip if regime says no trading
-                        if self.regime_switcher.should_skip_trade(regime):
-                            if cycle % 12 == 0:
+                        # Volume filter: require sufficient market participation
+                        volume_ok = True
+                        if VOLUME_CONFIRM_ENABLED:
+                            volume_ok = volume_ratio >= VOLUME_THRESHOLD
+
+                        # BB-enhanced entry: stronger signal when price is below lower band
+                        bb_entry_bonus = bb_oversold  # Extra bullish when below lower BB
+
+                        # Core entry: RSI oversold + bullish EMA + MACD confirmed + volume
+                        # OR: RSI oversold + BB below lower band + MACD confirmed (stronger signal)
+                        core_signal = (
+                            signal == "bullish"
+                            and rsi < RSI_OVERSOLD
+                            and macd_confirmed
+                            and volume_ok
+                        )
+
+                        bb_enhanced_signal = (
+                            rsi < RSI_OVERSOLD
+                            and bb_oversold
+                            and macd_confirmed
+                            and signal in ("bullish", "neutral")  # BB oversold compensates for neutral EMA
+                            and volume_ok
+                        )
+
+                        if (core_signal or bb_enhanced_signal) and balances.get("USDT", 0) >= MIN_TRADE_AMOUNT * 1.05:
+                            try:
+                                # Dynamic position sizing based on ATR
+                                trade_amt = self._calculate_trade_amount(analysis)
+                                self.guard.pre_trade_check("buy", trade_amt)
+                                eth_qty = trade_amt / price
+
+                                # Build entry reason
+                                reasons = [f"RSI={rsi:.1f}"]
+                                if signal == "bullish":
+                                    reasons.append(f"EMA cross {ema_fast:.2f}>{ema_slow:.2f}")
+                                if bb_oversold:
+                                    reasons.append(f"BB below lower (${bb_lower:.2f})")
+                                reasons.append(f"MACD hist {macd_histogram:+.2f}")
+                                if volume_ratio > 1.0:
+                                    reasons.append(f"Vol {volume_ratio:.1f}x")
+                                reasons.append(f"Size=${trade_amt:.0f}")
+
                                 self.log(
-                                    f"No entry: Regime={regime} (skipping) | "
-                                    f"Confidence: {signal_result.confidence:.2f}",
+                                    f"ENTRY SIGNAL: {' + '.join(reasons)} = BULLISH @ ${price:.2f}",
                                     "SIGNAL"
                                 )
-                        elif signal_result.action.value >= Signal.BUY.value:
-                            # Check minimum confidence
-                            min_conf = regime_params.get("min_confidence", 0.5)
-                            if signal_result.confidence >= min_conf:
-                                # Validate trade with risk manager
-                                trade_amount, reason = self._calculate_trade(
-                                    price, atr, total, regime_params
-                                )
 
-                                if trade_amount and trade_amount > 1.0:
-                                    # Check daily loss and drawdown
-                                    if (self.risk_mgr.check_daily_loss(-self.total_pnl) and
-                                        self.risk_mgr.check_drawdown(self.peak_balance, total)):
-                                        try:
-                                            self.guard.pre_trade_check("buy", trade_amount)
-
-                                            self.log(
-                                                f"ENTRY SIGNAL: {signal_result.action.name} "
-                                                f"(score={signal_result.score:.2f}, "
-                                                f"conf={signal_result.confidence:.2f}) "
-                                                f"Regime: {regime} @ ${price:.2f}",
-                                                "SIGNAL"
-                                            )
-                                            for r in signal_result.reasons[:5]:
-                                                self.log(f"  {r}", "CONFLUENCE")
-
-                                            success, result = self.place_order("buy", trade_amount)
-                                            if success:
-                                                eth_qty = trade_amount / price
-                                                # Compute ATR-based stops
-                                                sl, tp = self._compute_stops(
-                                                    price, atr, regime_params
-                                                )
-                                                self.position = {
-                                                    "side": "long",
-                                                    "entry": price,
-                                                    "amount": eth_qty,
-                                                    "stop_loss": sl,
-                                                    "take_profit": tp,
-                                                    "trailing_stop": sl,
-                                                    "highest_since_entry": price,
-                                                    "regime_at_entry": regime,
-                                                    "timestamp": datetime.now().isoformat(),
-                                                }
-                                                self.guard.record_trade("buy", success=True)
-                                                self.save_state(include_balance=True)
-                                                self.log(
-                                                    f"BUY: {eth_qty:.6f} {base_currency} @ ${price:.2f} | "
-                                                    f"SL: ${sl:.2f} TP: ${tp:.2f} | "
-                                                    f"Risk: ${trade_amount:.2f} ({trade_amount/total*100:.1f}%)",
-                                                    "BUY"
-                                                )
-                                            else:
-                                                self.log(f"Buy failed: {result}", "ALERT")
-                                                time.sleep(30)
-                                        except TradingHalt as e:
-                                            self.log(f"Trade blocked: {e}", "GUARD")
-                                            time.sleep(60)
-                                    else:
-                                        if cycle % 6 == 0:
-                                            self.log(
-                                                f"Risk limit: daily loss or drawdown reached",
-                                                "RISK"
-                                            )
+                                success, result = self.place_order("buy", trade_amt)
+                                if success:
+                                    self.position = {
+                                        "side": "long",
+                                        "entry": price,
+                                        "amount": eth_qty,
+                                        "timestamp": datetime.now().isoformat()
+                                    }
+                                    # Reset trailing stop for new position
+                                    self.trailing_high = price
+                                    self.trailing_active = False
+                                    self.guard.record_trade("buy", success=True)
+                                    self.save_state(include_balance=True)
+                                    self.log(f"BUY: {eth_qty:.6f} ETH @ ${price:.2f} (${trade_amt:.2f})", "BUY")
                                 else:
-                                    if cycle % 12 == 0:
-                                        self.log(
-                                            f"No entry: {reason}",
-                                            "SIGNAL"
-                                        )
-                            else:
-                                if cycle % 12 == 0:
-                                    self.log(
-                                        f"No entry: Confidence {signal_result.confidence:.2f} "
-                                        f"< min {min_conf:.2f} | {signal_result.action.name}",
-                                        "SIGNAL"
-                                    )
-                        elif cycle % 18 == 0:
-                            self.log(
-                                f"No entry: Signal={signal_result.action.name} | "
-                                f"Score={signal_result.score:.2f} | RSI={rsi:.1f}",
-                                "SIGNAL"
-                            )
+                                    self.log(f"Buy failed: {result}", "ALERT")
+                                    time.sleep(30)
+                            except TradingHalt as e:
+                                self.log(f"Trade blocked: {e}", "GUARD")
+                                time.sleep(60)
 
+                        elif cycle % 12 == 0:
+                            # Periodically explain why we're NOT buying
+                            reasons = []
+                            if signal != "bullish" and not bb_oversold:
+                                reasons.append(f"trend={signal}")
+                            if rsi >= RSI_OVERSOLD:
+                                reasons.append(f"RSI={rsi:.1f} (need <{RSI_OVERSOLD})")
+                            if not macd_confirmed:
+                                reasons.append(f"MACD hist={macd_histogram:+.2f} (need >0)")
+                            if not volume_ok:
+                                reasons.append(f"Vol={volume_ratio:.1f}x (need >={VOLUME_THRESHOLD}x)")
+                            if not bb_oversold:
+                                reasons.append(f"BB%={bb_percent_b:.2f} (need <0)")
+                            reason_str = " | ".join(reasons) if reasons else "waiting for setup"
+                            self.log(f"No entry: {reason_str} | EMA: {ema_fast:.2f} vs {ema_slow:.2f}", "SIGNAL")
                     else:
-                        # ═══ HAVE POSITION — Monitor for exit ═══
+                        # HAVE POSITION — Monitor for exit
                         entry = self.position.get("entry", 0)
                         if entry <= 0:
                             self.log(f"Recovery position. Updating entry to ${price:.2f}", "GUARD")
@@ -811,68 +1012,66 @@ class ConfluenceTrader:
                         current_pnl_pct = ((price - entry) / entry) * 100
                         unrealized = (price - entry) * self.position["amount"]
 
-                        # Update highest price for trailing stop
-                        if price > self.position.get("highest_since_entry", price):
-                            self.position["highest_since_entry"] = price
+                        # Check exit conditions
+                        # 0. Trailing stop (v4.2) — checked first to lock in profits
+                        trail_exit, trail_reason = self._check_trailing_stop(price, current_pnl_pct)
+                        if trail_exit:
+                            self._execute_exit(trail_reason, current_pnl_pct, unrealized)
 
-                        # Compute dynamic trailing stop
-                        atr_sl_mult = regime_params.get("trailing_atr_mult", 2.5)
-                        if atr > 0 and regime_params.get("trailing_stop", True):
-                            highest = self.position["highest_since_entry"]
-                            new_trail = ATRStops.compute_trailing_stop(
-                                highest, atr, highest, multiplier=atr_sl_mult
-                            )
-                            # Trail only tightens
-                            if new_trail > self.position.get("trailing_stop", 0):
-                                self.position["trailing_stop"] = new_trail
+                        # 1. Take profit hit (fixed TP as safety net)
+                        elif current_pnl_pct >= TAKE_PROFIT_PCT:
+                            # If trailing is active, let it ride instead of fixed TP
+                            if self.trailing_active:
+                                # Trailing stop manages the exit — only log
+                                if cycle % 3 == 0:
+                                    self.log(
+                                        f"TP zone (+{current_pnl_pct:.2f}%) — trailing stop managing exit "
+                                        f"(peak: ${self.trailing_high:.2f})",
+                                        "INFO"
+                                    )
+                            else:
+                                self._execute_exit("TP hit", current_pnl_pct, unrealized)
 
-                        trailing_stop = self.position.get("trailing_stop", 0)
+                        # 2. Stop loss hit (hard stop — always enforced)
+                        elif current_pnl_pct <= -STOP_LOSS_PCT:
+                            self._execute_exit("SL hit", current_pnl_pct, unrealized)
 
-                        # Exit conditions (priority order)
-                        exited = False
-
-                        # 1. Hard stop loss
-                        if price <= self.position.get("stop_loss", 0):
-                            exited = self._execute_exit("SL hit", current_pnl_pct, unrealized)
-
-                        # 2. Trailing stop hit
-                        elif trailing_stop > 0 and price <= trailing_stop:
-                            exited = self._execute_exit(
-                                f"Trailing stop ${trailing_stop:.2f}",
+                        # 3. BB overbought exit (v4.2) — price above upper band + RSI overbought
+                        elif (bb_overbought
+                              and rsi > RSI_OVERBOUGHT
+                              and current_pnl_pct > 0.5):
+                            self._execute_exit(
+                                f"BB overbought (%B={bb_percent_b:.2f}) + RSI {rsi:.1f}",
                                 current_pnl_pct, unrealized
                             )
 
-                        # 3. Take profit
-                        elif price >= self.position.get("take_profit", float("inf")):
-                            exited = self._execute_exit("TP hit", current_pnl_pct, unrealized)
-
-                        # 4. Strong counter-signal while in profit
-                        elif (signal_result.action == Signal.STRONG_SELL
-                              and current_pnl_pct > 0.3):
-                            exited = self._execute_exit(
-                                f"Strong sell signal (score={signal_result.score:.2f})",
+                        # 4. Bearish signal while in profit (EMA exit)
+                        elif (signal == "bearish"
+                              and rsi > RSI_OVERBOUGHT
+                              and current_pnl_pct > 0.5):
+                            self._execute_exit(
+                                f"RSI overbought ({rsi:.1f}) + bearish crossover",
                                 current_pnl_pct, unrealized
                             )
 
-                        # 5. Regime change to quiet — exit any position
-                        elif regime == "quiet" and current_pnl_pct > -0.5:
-                            exited = self._execute_exit(
-                                "Regime changed to quiet",
-                                current_pnl_pct, unrealized
-                            )
-
-                        if not exited and cycle % 6 == 0:
-                            trail_str = f" | Trail: ${trailing_stop:.2f}" if trailing_stop > 0 else ""
-                            self.log(
-                                f"Position: {current_pnl_pct:+.2f}% (U:${unrealized:+.2f}) | "
-                                f"SL: ${self.position.get('stop_loss', 0):.2f} "
-                                f"TP: ${self.position.get('take_profit', 0):.2f}{trail_str}",
-                                "INFO"
-                            )
+                        else:
+                            # Position running normally
+                            if cycle % 6 == 0:
+                                macd_str = f"MACD:{macd_histogram:+.2f}" if macd_histogram != 0 else "MACD:--"
+                                bb_str = f"BB%:{bb_percent_b:.2f}" if bb_bandwidth > 0 else "BB:--"
+                                trail_str = ""
+                                if self.trailing_active:
+                                    trail_str = f" | Trail:${self.trailing_high:.2f}"
+                                self.log(
+                                    f"Position: {current_pnl_pct:+.2f}% "
+                                    f"(U:${unrealized:+.2f}) | RSI: {rsi:.1f} | "
+                                    f"{macd_str} | {bb_str}{trail_str}",
+                                    "INFO"
+                                )
 
                     cycle += 1
 
-                    # Save state periodically
+                    # Save state periodically (lightweight)
                     if cycle % 3 == 0:
                         self.save_state(include_balance=False)
 
@@ -894,11 +1093,11 @@ class ConfluenceTrader:
                 except TradingHalt as e:
                     self.log(f"EMERGENCY: {e}", "ALERT")
                     if self.position:
-                        p = self.get_price()
-                        if p and self.position.get("entry", 0) > 0:
-                            pct = ((p - self.position["entry"]) / self.position["entry"]) * 100
-                            ur = (p - self.position["entry"]) * self.position["amount"]
-                            self._execute_exit("EMERGENCY", pct, ur)
+                        price = self.get_price()
+                        if price and self.position.get("entry", 0) > 0:
+                            pnl_pct = ((price - self.position["entry"]) / self.position["entry"]) * 100
+                            unrealized = (price - self.position["entry"]) * self.position["amount"]
+                            self._execute_exit("EMERGENCY", pnl_pct, unrealized)
                     self.log("Bot stopped by guard. Manual restart required.", "ALERT")
                     break
 
@@ -914,57 +1113,7 @@ class ConfluenceTrader:
             self.guard.release_lock()
             self.log("Final state saved. Bot stopped.", "INFO")
 
-    # ─── Trade Calculation Helpers ─────────────────────────────────────
-
-    def _calculate_trade(self, price, atr, total_balance, regime_params):
-        """
-        Calculate trade size using Kelly Criterion scaled by regime.
-        Returns (trade_amount_usdt, reason_string).
-        """
-        position_scale = regime_params.get("position_scale", 0.75)
-
-        if position_scale <= 0:
-            return None, "Regime says skip trading"
-
-        # Kelly-based position sizing
-        kelly_data = self.risk_mgr.get_status()
-        kelly_fraction = kelly_data.get("current_kelly", 0.02)
-
-        # Risk amount based on max risk % of total balance
-        max_risk_amount = total_balance * (self.risk_mgr.max_risk_per_trade_pct / 100.0)
-        risk_amount = max_risk_amount * position_scale
-
-        # Minimum trade size (KuCoin minimum ~$1)
-        if risk_amount < 1.0:
-            return None, f"Trade amount ${risk_amount:.2f} below minimum"
-
-        # Cap at reasonable fraction of balance
-        max_trade = total_balance * 0.10 * position_scale  # max 10% per trade scaled
-        trade_amount = min(risk_amount * 10, max_trade)  # leverage risk amount by R:R assumption
-
-        # Ensure at least $5 for meaningful trade
-        if trade_amount < 5.0:
-            return None, f"Trade size ${trade_amount:.2f} too small"
-
-        return trade_amount, f"${trade_amount:.2f} ({trade_amount/total_balance*100:.1f}% of balance)"
-
-    def _compute_stops(self, price, atr, regime_params):
-        """Compute ATR-based stop loss and take profit."""
-        if atr and atr > 0:
-            sl_mult = regime_params.get("sl_atr_multiplier", 1.5)
-            tp_mult = regime_params.get("tp_atr_multiplier", 2.5)
-            sl = ATRStops.compute_stop_loss(price, atr, side="long", multiplier=sl_mult)
-            tp = ATRStops.compute_take_profit(price, atr, side="long", risk_reward_ratio=tp_mult/sl_mult)
-        else:
-            # Fallback to fixed percentages
-            sl_pct = STOP_LOSS_PCT if STOP_LOSS_PCT > 0 else 1.5
-            tp_pct = TAKE_PROFIT_PCT if TAKE_PROFIT_PCT > 0 else 2.5
-            sl = price * (1 - sl_pct / 100)
-            tp = price * (1 + tp_pct / 100)
-
-        return sl, tp
-
 
 if __name__ == "__main__":
-    trader = ConfluenceTrader()
+    trader = SmartTrader()
     trader.run()
