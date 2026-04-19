@@ -308,7 +308,7 @@ class SecureLogger:
         try:
             with open(self.log_file, 'a') as f:
                 f.write(line + "\n")
-        except:
+        except Exception as e:  # SECURITY: Specific exception handling
             pass
         
         # Also print if stdout is TTY
