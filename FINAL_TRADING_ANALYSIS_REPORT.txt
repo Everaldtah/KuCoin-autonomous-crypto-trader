@@ -1,0 +1,268 @@
+
+================================================================================
+           TRADING BOT PROFIT PROJECTION & MARKET ANALYSIS REPORT
+================================================================================
+Generated: 2026-04-19 17:18
+Bot Version: v5.0 - Hephaestus
+Exchange: KuCoin
+Pairs Analyzed: 18
+Starting Capital: £1,000 GBP
+Data Period: June 2025 - February 2026 (~8.5 months)
+Out-of-Sample Trades: 3,788
+================================================================================
+
+EXECUTIVE SUMMARY
+-----------------
+⚠️ DEPLOYMENT CAUTION RECOMMENDED ⚠️
+
+Based on walk-forward backtesting across 18 pairs with 3,788 out-of-sample trades,
+the ensemble strategy shows MARGINAL edge on most pairs. Out of 18 pairs analyzed,
+ONLY 4 pairs (SHIB, TRX, BTC, KCS) show positive average returns out-of-sample.
+The remaining 14 pairs have NEGATIVE expected value.
+
+The strategy's win rate (39-49%) is BELOW 50% across all pairs, meaning the bot
+is essentially "playing defense" - winning slightly more when it wins than when it
+loses, but losing more often than it wins.
+
+With conservative position sizing (3-15% per trade), the bot prevents large
+drawdowns but also limits upside. The median 6-month projection of +3.5% (£35
+profit on £1,000) barely exceeds opportunity cost.
+
+RECOMMENDATION: Before deploying £1,000, consider:
+1. Reducing to fewer, higher-conviction pairs (SHIB, TRX, BTC, KCS only)
+2. Optimizing entry thresholds to require stronger signals (raise BUY_THRESHOLD)
+3. Adding more pairs with positive out-of-sample edge
+4. Consider NOT deploying until the strategy shows better out-of-sample performance
+
+================================================================================
+
+PER-PAIR PERFORMANCE (OUT-OF-SAMPLE)
+------------------------------------
+
+SHIB-USDT
+  Trades: 230 | Win Rate: 43.9% | Profit Factor: 1.03
+  Avg Return: +0.034% | Median: -1.750%
+  Avg Win: +2.312% | Avg Loss: -1.750%
+  Max Win: +2.75% | Max Loss: -1.75%
+  Exit Types: TP=72 SL=129 SIG=29
+  Status: LOW WIN RATE
+
+TRX-USDT
+  Trades: 98 | Win Rate: 49.0% | Profit Factor: 1.03
+  Avg Return: +0.021% | Median: -0.250%
+  Avg Win: +1.676% | Avg Loss: -1.567%
+  Max Win: +2.75% | Max Loss: -1.85%
+  Exit Types: TP=20 SL=42 SIG=36
+  Status: POSITIVE EDGE
+
+BTC-USDT
+  Trades: 102 | Win Rate: 46.1% | Profit Factor: 1.01
+  Avg Return: +0.011% | Median: -0.161%
+  Avg Win: +1.815% | Avg Loss: -1.531%
+  Max Win: +2.65% | Max Loss: -1.85%
+  Exit Types: TP=24 SL=43 SIG=35
+  Status: POSITIVE EDGE
+
+KCS-USDT
+  Trades: 93 | Win Rate: 44.1% | Profit Factor: 1.01
+  Avg Return: +0.009% | Median: -0.192%
+  Avg Win: +1.727% | Avg Loss: -1.345%
+  Max Win: +2.65% | Max Loss: -1.85%
+  Exit Types: TP=22 SL=32 SIG=39
+  Status: LOW WIN RATE
+
+XRP-USDT
+  Trades: 187 | Win Rate: 43.3% | Profit Factor: 0.99
+  Avg Return: -0.007% | Median: -1.750%
+  Avg Win: +2.233% | Avg Loss: -1.719%
+  Max Win: +2.75% | Max Loss: -1.85%
+  Exit Types: TP=56 SL=103 SIG=28
+  Status: NEGATIVE | LOW WIN RATE
+
+DOGE-USDT
+  Trades: 244 | Win Rate: 41.0% | Profit Factor: 0.99
+  Avg Return: -0.013% | Median: -1.750%
+  Avg Win: +2.459% | Avg Loss: -1.729%
+  Max Win: +2.75% | Max Loss: -1.75%
+  Exit Types: TP=76 SL=142 SIG=26
+  Status: NEGATIVE | LOW WIN RATE
+
+AVAX-USDT
+  Trades: 263 | Win Rate: 42.2% | Profit Factor: 0.98
+  Avg Return: -0.024% | Median: -1.850%
+  Avg Win: +2.418% | Avg Loss: -1.807%
+  Max Win: +2.65% | Max Loss: -1.85%
+  Exit Types: TP=88 SL=148 SIG=27
+  Status: NEGATIVE | LOW WIN RATE
+
+ETH-USDT
+  Trades: 187 | Win Rate: 43.9% | Profit Factor: 0.96
+  Avg Return: -0.040% | Median: -1.850%
+  Avg Win: +2.254% | Avg Loss: -1.833%
+  Max Win: +2.65% | Max Loss: -1.85%
+  Exit Types: TP=62 SL=104 SIG=21
+  Status: NEGATIVE | LOW WIN RATE
+
+DOT-USDT
+  Trades: 241 | Win Rate: 43.2% | Profit Factor: 0.95
+  Avg Return: -0.051% | Median: -1.850%
+  Avg Win: +2.267% | Avg Loss: -1.810%
+  Max Win: +2.65% | Max Loss: -1.85%
+  Exit Types: TP=73 SL=133 SIG=35
+  Status: NEGATIVE | LOW WIN RATE
+
+UNI-USDT
+  Trades: 276 | Win Rate: 40.6% | Profit Factor: 0.92
+  Avg Return: -0.089% | Median: -1.850%
+  Avg Win: +2.442% | Avg Loss: -1.818%
+  Max Win: +2.65% | Max Loss: -1.85%
+  Exit Types: TP=91 SL=160 SIG=25
+  Status: NEGATIVE | LOW WIN RATE | PF < 1.0
+
+ADA-USDT
+  Trades: 259 | Win Rate: 39.4% | Profit Factor: 0.91
+  Avg Return: -0.094% | Median: -1.750%
+  Avg Win: +2.406% | Avg Loss: -1.718%
+  Max Win: +2.75% | Max Loss: -1.75%
+  Exit Types: TP=74 SL=154 SIG=31
+  Status: NEGATIVE | LOW WIN RATE | PF < 1.0
+
+APE-USDT
+  Trades: 257 | Win Rate: 40.9% | Profit Factor: 0.90
+  Avg Return: -0.107% | Median: -1.850%
+  Avg Win: +2.401% | Avg Loss: -1.840%
+  Max Win: +2.65% | Max Loss: -1.85%
+  Exit Types: TP=81 SL=151 SIG=25
+  Status: NEGATIVE | LOW WIN RATE | PF < 1.0
+
+LINK-USDT
+  Trades: 240 | Win Rate: 40.8% | Profit Factor: 0.89
+  Avg Return: -0.121% | Median: -1.850%
+  Avg Win: +2.373% | Avg Loss: -1.841%
+  Max Win: +2.65% | Max Loss: -1.85%
+  Exit Types: TP=78 SL=141 SIG=21
+  Status: NEGATIVE | LOW WIN RATE | PF < 1.0
+
+XLM-USDT
+  Trades: 225 | Win Rate: 41.3% | Profit Factor: 0.89
+  Avg Return: -0.121% | Median: -1.750%
+  Avg Win: +2.258% | Avg Loss: -1.797%
+  Max Win: +2.75% | Max Loss: -1.85%
+  Exit Types: TP=66 SL=131 SIG=28
+  Status: NEGATIVE | LOW WIN RATE | PF < 1.0
+
+AAVE-USDT
+  Trades: 236 | Win Rate: 41.1% | Profit Factor: 0.88
+  Avg Return: -0.126% | Median: -1.850%
+  Avg Win: +2.288% | Avg Loss: -1.810%
+  Max Win: +2.65% | Max Loss: -1.85%
+  Exit Types: TP=72 SL=135 SIG=29
+  Status: NEGATIVE | LOW WIN RATE | PF < 1.0
+
+SOL-USDT
+  Trades: 230 | Win Rate: 42.6% | Profit Factor: 0.87
+  Avg Return: -0.133% | Median: -1.850%
+  Avg Win: +2.147% | Avg Loss: -1.825%
+  Max Win: +2.65% | Max Loss: -1.85%
+  Exit Types: TP=66 SL=129 SIG=35
+  Status: NEGATIVE | LOW WIN RATE | PF < 1.0
+
+BCH-USDT
+  Trades: 207 | Win Rate: 42.0% | Profit Factor: 0.84
+  Avg Return: -0.161% | Median: -1.850%
+  Avg Win: +2.008% | Avg Loss: -1.733%
+  Max Win: +2.65% | Max Loss: -1.85%
+  Exit Types: TP=52 SL=111 SIG=44
+  Status: NEGATIVE | LOW WIN RATE | PF < 1.0
+
+ATOM-USDT
+  Trades: 213 | Win Rate: 39.9% | Profit Factor: 0.81
+  Avg Return: -0.209% | Median: -1.850%
+  Avg Win: +2.205% | Avg Loss: -1.812%
+  Max Win: +2.65% | Max Loss: -1.85%
+  Exit Types: TP=60 SL=124 SIG=29
+  Status: NEGATIVE | LOW WIN RATE | PF < 1.0
+
+================================================================================
+
+MONTE CARLO PROJECTIONS (10,000 simulations, starting £1,000)
+-----------------------------------------------------------
+
+BASE CASE:
+
+  Capital Percentiles (6-month projection):
+    5th percentile (low-end):   £1,015 (+1.5%)
+    25th percentile:           £1,026 (+2.6%)
+    50th percentile (median):  £1,035 (+3.5%)
+    75th percentile:           £1,043 (+4.3%)
+    95th percentile (high-end): £1,056 (+5.6%)
+  
+  Risk Metrics:
+    Probability of 20%+ drawdown: 0.0%
+    Probability of 30%+ drawdown: 0.0%
+    Probability of 50%+ drawdown: 0.0%
+    Risk of ruin (< £200): 0.0%
+    Median max drawdown: 0.6%
+    95th percentile max drawdown: 1.0%
+
+CONSERVATIVE SCENARIO (30% performance drag):
+  5th percentile:   £996 (-0.4%)
+  50th percentile:  £1,007 (+0.7%)
+  95th percentile:  £1,018 (+1.8%)
+
+ADVERSE SCENARIO (Doubled loss frequency):
+  5th percentile:   £1,016 (+1.6%)
+  50th percentile:  £1,038 (+3.8%)
+  95th percentile:  £1,060 (+6.0%)
+
+================================================================================
+
+RISK ASSESSMENT
+---------------
+1. STRATEGY RISK: The ensemble indicator approach shows WEAK EDGE out-of-sample.
+   Most pairs have negative average returns and profit factors below 1.0.
+
+2. CORRELATION RISK: Crypto assets tend to correlate during market stress.
+   When BTC dumps, alts typically dump together.
+
+3. DRAWDOWN RISK is LOW due to conservative position sizing (max 15% per trade).
+   The portfolio-level drawdown circuit breaker (8%) provides protection.
+
+4. SURVIVAL RISK: Risk of ruin is effectively 0% based on Monte Carlo.
+
+5. LIQUIDITY RISK: SHIB and other micro-cap pairs may have liquidity issues.
+
+================================================================================
+
+POSITION SIZING RECOMMENDATION
+------------------------------
+Current quarter-Kelly sizing is appropriate given the marginal edge.
+Do NOT increase position sizes without evidence of stronger edge.
+
+================================================================================
+
+BOT UPGRADE RECOMMENDATIONS
+---------------------------
+1. PAIR FILTERING: Only trade the 4 pairs with positive edge: SHIB, TRX, BTC, KCS
+
+2. HIGHER SIGNAL THRESHOLD: Raise BUY_THRESHOLD from 0.55 to 0.60-0.65
+
+3. MOMENTUM FILTER: Only trade in direction of 1h/4h trend alignment
+
+4. DYNAMIC TAKE PROFIT: Use ATR-based TP instead of fixed 3%
+
+5. VOLATILITY-ADJUSTED SIZING: Larger in low-vol, smaller in high-vol
+
+================================================================================
+
+CAVEATS & LIMITATIONS
+---------------------
+1. Only ~8.5 months of data (not full 12 months requested)
+2. Backtest assumes perfect execution at close prices
+3. Using default tier fees (0.1%); actual may be better/worse
+4. Results sensitive to threshold parameters
+5. Single timeframe (1h) analysis
+
+================================================================================
+                              END OF REPORT
+================================================================================

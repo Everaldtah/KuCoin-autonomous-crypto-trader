@@ -1,0 +1,380 @@
+{
+  "BTC-USDT": {
+    "n_trades": 102,
+    "n_wins": 47,
+    "n_losses": 55,
+    "win_rate": 0.46078431372549017,
+    "avg_win": 1.8153501287642344,
+    "avg_loss": -1.5312381783284743,
+    "profit_factor": 1.013101177138495,
+    "avg_return": 0.01081721807698949,
+    "median_return": -0.16052511105972697,
+    "std_return": 1.8392524315480254,
+    "max_win": 2.6500000000000092,
+    "max_loss": -1.8500000000000085,
+    "avg_duration_hours": 5.5588235294117645,
+    "trades_per_day": 1.7,
+    "exit_types": {
+      "TAKE_PROFIT": 24,
+      "STOP_LOSS": 43,
+      "SIGNAL": 35
+    }
+  },
+  "ETH-USDT": {
+    "n_trades": 187,
+    "n_wins": 82,
+    "n_losses": 105,
+    "win_rate": 0.4385026737967914,
+    "avg_win": 2.2542781816788695,
+    "avg_loss": -1.8325626455038295,
+    "profit_factor": 0.9606677936115546,
+    "avg_return": -0.04047201540232505,
+    "median_return": -1.8499999999999948,
+    "std_return": 2.0980732173733054,
+    "max_win": 2.6500000000000115,
+    "max_loss": -1.8500000000000103,
+    "avg_duration_hours": -0.0053475935828877,
+    "trades_per_day": 3.1166666666666667,
+    "exit_types": {
+      "TAKE_PROFIT": 62,
+      "STOP_LOSS": 104,
+      "SIGNAL": 21
+    }
+  },
+  "KCS-USDT": {
+    "n_trades": 93,
+    "n_wins": 41,
+    "n_losses": 52,
+    "win_rate": 0.44086021505376344,
+    "avg_win": 1.7266571416011391,
+    "avg_loss": -1.3449617820250863,
+    "profit_factor": 1.0122241125785711,
+    "avg_return": 0.00919279720798069,
+    "median_return": -0.19195276143646778,
+    "std_return": 1.7574743442789604,
+    "max_win": 2.6500000000000106,
+    "max_loss": -1.8500000000000072,
+    "avg_duration_hours": -54.58064516129032,
+    "trades_per_day": 1.55,
+    "exit_types": {
+      "TAKE_PROFIT": 22,
+      "STOP_LOSS": 32,
+      "SIGNAL": 39
+    }
+  },
+  "XRP-USDT": {
+    "n_trades": 187,
+    "n_wins": 81,
+    "n_losses": 106,
+    "win_rate": 0.43315508021390375,
+    "avg_win": 2.233055168292473,
+    "avg_loss": -1.7187298865463654,
+    "profit_factor": 0.9928210516751724,
+    "avg_return": -0.006994114129542326,
+    "median_return": -1.749999999999994,
+    "std_return": 2.042727884877963,
+    "max_win": 2.750000000000012,
+    "max_loss": -1.8500000000000072,
+    "avg_duration_hours": 0.9893048128342246,
+    "trades_per_day": 3.1166666666666667,
+    "exit_types": {
+      "TAKE_PROFIT": 56,
+      "STOP_LOSS": 103,
+      "SIGNAL": 28
+    }
+  },
+  "ADA-USDT": {
+    "n_trades": 259,
+    "n_wins": 102,
+    "n_losses": 157,
+    "win_rate": 0.3938223938223938,
+    "avg_win": 2.4055799303799676,
+    "avg_loss": -1.718491533455635,
+    "profit_factor": 0.9094376178544282,
+    "avg_return": -0.09433983727327402,
+    "median_return": -1.7499999999999956,
+    "std_return": 2.0627353644778887,
+    "max_win": 2.7500000000000107,
+    "max_loss": -1.750000000000009,
+    "avg_duration_hours": -0.46332046332046334,
+    "trades_per_day": 4.316666666666666,
+    "exit_types": {
+      "TAKE_PROFIT": 74,
+      "STOP_LOSS": 154,
+      "SIGNAL": 31
+    }
+  },
+  "XLM-USDT": {
+    "n_trades": 225,
+    "n_wins": 93,
+    "n_losses": 132,
+    "win_rate": 0.41333333333333333,
+    "avg_win": 2.25805196211575,
+    "avg_loss": -1.7965661255868102,
+    "profit_factor": 0.8855227889351766,
+    "avg_return": -0.12065731600308509,
+    "median_return": -1.749999999999998,
+    "std_return": 2.0650150051505514,
+    "max_win": 2.75000000000001,
+    "max_loss": -1.8500000000000107,
+    "avg_duration_hours": -0.04,
+    "trades_per_day": 3.75,
+    "exit_types": {
+      "TAKE_PROFIT": 66,
+      "STOP_LOSS": 131,
+      "SIGNAL": 28
+    }
+  },
+  "DOT-USDT": {
+    "n_trades": 241,
+    "n_wins": 104,
+    "n_losses": 137,
+    "win_rate": 0.4315352697095436,
+    "avg_win": 2.267492714162023,
+    "avg_loss": -1.8104523026538897,
+    "profit_factor": 0.9507614949230179,
+    "avg_return": -0.05067519996154557,
+    "median_return": -1.849999999999996,
+    "std_return": 2.076407485693039,
+    "max_win": 2.650000000000013,
+    "max_loss": -1.850000000000012,
+    "avg_duration_hours": -13.377593360995851,
+    "trades_per_day": 4.016666666666667,
+    "exit_types": {
+      "TAKE_PROFIT": 73,
+      "STOP_LOSS": 133,
+      "SIGNAL": 35
+    }
+  },
+  "LINK-USDT": {
+    "n_trades": 240,
+    "n_wins": 98,
+    "n_losses": 142,
+    "win_rate": 0.4083333333333333,
+    "avg_win": 2.3727624005169674,
+    "avg_loss": -1.8414586466138119,
+    "profit_factor": 0.8892625697868994,
+    "avg_return": -0.12065171903541032,
+    "median_return": -1.849999999999996,
+    "std_return": 2.1110749330234375,
+    "max_win": 2.6500000000000137,
+    "max_loss": -1.8500000000000103,
+    "avg_duration_hours": -0.7333333333333333,
+    "trades_per_day": 4.0,
+    "exit_types": {
+      "TAKE_PROFIT": 78,
+      "STOP_LOSS": 141,
+      "SIGNAL": 21
+    }
+  },
+  "BCH-USDT": {
+    "n_trades": 207,
+    "n_wins": 87,
+    "n_losses": 120,
+    "win_rate": 0.42028985507246375,
+    "avg_win": 2.007589339908159,
+    "avg_loss": -1.7330908997237102,
+    "profit_factor": 0.8398303122273918,
+    "avg_return": -0.16092094393640324,
+    "median_return": -1.8499999999999934,
+    "std_return": 1.9576424235211876,
+    "max_win": 2.650000000000012,
+    "max_loss": -1.850000000000012,
+    "avg_duration_hours": -27.396135265700483,
+    "trades_per_day": 3.45,
+    "exit_types": {
+      "TAKE_PROFIT": 52,
+      "STOP_LOSS": 111,
+      "SIGNAL": 44
+    }
+  },
+  "UNI-USDT": {
+    "n_trades": 276,
+    "n_wins": 112,
+    "n_losses": 164,
+    "win_rate": 0.4057971014492754,
+    "avg_win": 2.442476839042066,
+    "avg_loss": -1.8179870524355506,
+    "profit_factor": 0.9175164152096589,
+    "avg_return": -0.0891031544446336,
+    "median_return": -1.849999999999996,
+    "std_return": 2.126028137314037,
+    "max_win": 2.6500000000000115,
+    "max_loss": -1.8500000000000099,
+    "avg_duration_hours": -11.768115942028986,
+    "trades_per_day": 4.6,
+    "exit_types": {
+      "TAKE_PROFIT": 91,
+      "STOP_LOSS": 160,
+      "SIGNAL": 25
+    }
+  },
+  "AAVE-USDT": {
+    "n_trades": 236,
+    "n_wins": 97,
+    "n_losses": 139,
+    "win_rate": 0.4110169491525424,
+    "avg_win": 2.287656226277335,
+    "avg_loss": -1.8098713307165228,
+    "profit_factor": 0.8820637930230032,
+    "avg_return": -0.12571805517243725,
+    "median_return": -1.8499999999999959,
+    "std_return": 2.079629024687497,
+    "max_win": 2.650000000000012,
+    "max_loss": -1.850000000000012,
+    "avg_duration_hours": -0.75,
+    "trades_per_day": 3.933333333333333,
+    "exit_types": {
+      "TAKE_PROFIT": 72,
+      "STOP_LOSS": 135,
+      "SIGNAL": 29
+    }
+  },
+  "ATOM-USDT": {
+    "n_trades": 213,
+    "n_wins": 85,
+    "n_losses": 128,
+    "win_rate": 0.39906103286384975,
+    "avg_win": 2.204951804447271,
+    "avg_loss": -1.8119957404542975,
+    "profit_factor": 0.80807353734378,
+    "avg_return": -0.2089885042259722,
+    "median_return": -1.8499999999999948,
+    "std_return": 2.0388196195056123,
+    "max_win": 2.6500000000000137,
+    "max_loss": -1.8500000000000114,
+    "avg_duration_hours": 0.014084507042253521,
+    "trades_per_day": 3.55,
+    "exit_types": {
+      "TAKE_PROFIT": 60,
+      "STOP_LOSS": 124,
+      "SIGNAL": 29
+    }
+  },
+  "TRX-USDT": {
+    "n_trades": 98,
+    "n_wins": 48,
+    "n_losses": 50,
+    "win_rate": 0.4897959183673469,
+    "avg_win": 1.6755632169720258,
+    "avg_loss": -1.5671986833314844,
+    "profit_factor": 1.0263795557011173,
+    "avg_return": 0.02109285967431657,
+    "median_return": -0.2500802571608315,
+    "std_return": 1.8046973593410485,
+    "max_win": 2.7500000000000107,
+    "max_loss": -1.850000000000001,
+    "avg_duration_hours": -52.857142857142854,
+    "trades_per_day": 1.6333333333333333,
+    "exit_types": {
+      "TAKE_PROFIT": 20,
+      "STOP_LOSS": 42,
+      "SIGNAL": 36
+    }
+  },
+  "SOL-USDT": {
+    "n_trades": 230,
+    "n_wins": 98,
+    "n_losses": 132,
+    "win_rate": 0.4260869565217391,
+    "avg_win": 2.1470623295173143,
+    "avg_loss": -1.8249888196178945,
+    "profit_factor": 0.8734470624117413,
+    "avg_return": -0.13254963433419678,
+    "median_return": -1.8499999999999954,
+    "std_return": 2.0333738062490414,
+    "max_win": 2.6500000000000115,
+    "max_loss": -1.8500000000000099,
+    "avg_duration_hours": -0.3130434782608696,
+    "trades_per_day": 3.8333333333333335,
+    "exit_types": {
+      "TAKE_PROFIT": 66,
+      "STOP_LOSS": 129,
+      "SIGNAL": 35
+    }
+  },
+  "AVAX-USDT": {
+    "n_trades": 263,
+    "n_wins": 111,
+    "n_losses": 152,
+    "win_rate": 0.4220532319391635,
+    "avg_win": 2.418026254548081,
+    "avg_loss": -1.8069068987151085,
+    "profit_factor": 0.9772476322794061,
+    "avg_return": -0.023760206653457943,
+    "median_return": -1.849999999999996,
+    "std_return": 2.1203080558216576,
+    "max_win": 2.650000000000012,
+    "max_loss": -1.8500000000000114,
+    "avg_duration_hours": -0.38783269961977185,
+    "trades_per_day": 4.383333333333334,
+    "exit_types": {
+      "TAKE_PROFIT": 88,
+      "STOP_LOSS": 148,
+      "SIGNAL": 27
+    }
+  },
+  "DOGE-USDT": {
+    "n_trades": 244,
+    "n_wins": 100,
+    "n_losses": 144,
+    "win_rate": 0.4098360655737705,
+    "avg_win": 2.4587520778183407,
+    "avg_loss": -1.7294322179173056,
+    "profit_factor": 0.9872990123680149,
+    "avg_return": -0.012963244255155333,
+    "median_return": -1.7499999999999967,
+    "std_return": 2.0996388807827127,
+    "max_win": 2.7500000000000115,
+    "max_loss": -1.7500000000000113,
+    "avg_duration_hours": -13.508196721311476,
+    "trades_per_day": 4.066666666666666,
+    "exit_types": {
+      "TAKE_PROFIT": 76,
+      "STOP_LOSS": 142,
+      "SIGNAL": 26
+    }
+  },
+  "SHIB-USDT": {
+    "n_trades": 230,
+    "n_wins": 101,
+    "n_losses": 129,
+    "win_rate": 0.4391304347826087,
+    "avg_win": 2.311818182990589,
+    "avg_loss": -1.7500000000000013,
+    "profit_factor": 1.0343018227333303,
+    "avg_return": 0.0336679847045624,
+    "median_return": -1.749999999999996,
+    "std_return": 2.0783606282536833,
+    "max_win": 2.7500000000000115,
+    "max_loss": -1.750000000000012,
+    "avg_duration_hours": -12.830434782608696,
+    "trades_per_day": 3.8333333333333335,
+    "exit_types": {
+      "TAKE_PROFIT": 72,
+      "STOP_LOSS": 129,
+      "SIGNAL": 29
+    }
+  },
+  "APE-USDT": {
+    "n_trades": 257,
+    "n_wins": 105,
+    "n_losses": 152,
+    "win_rate": 0.4085603112840467,
+    "avg_win": 2.401347718583414,
+    "avg_loss": -1.8400174799642202,
+    "profit_factor": 0.9015271565166177,
+    "avg_return": -0.10716399417627642,
+    "median_return": -1.8499999999999954,
+    "std_return": 2.1188549025234984,
+    "max_win": 2.650000000000013,
+    "max_loss": -1.850000000000011,
+    "avg_duration_hours": -0.8443579766536965,
+    "trades_per_day": 4.283333333333333,
+    "exit_types": {
+      "TAKE_PROFIT": 81,
+      "STOP_LOSS": 151,
+      "SIGNAL": 25
+    }
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "version": "v5.0 - Hephaestus",
+  "exchange": "KuCoin",
+  "initial_capital_default": 500.0,
+  "max_pairs": 5,
+  "max_position_pct": 15.0,
+  "min_position_pct": 3.0,
+  "portfolio_drawdown_limit": 8.0,
+  "buy_signal_threshold": 0.55,
+  "sell_signal_threshold": 0.35,
+  "trailing_stop_pct": 1.0,
+  "take_profit_pct_base": 3.0,
+  "stop_loss_pct_base": 1.5,
+  "atr_period": 14,
+  "interval": "1hour",
+  "indicators": [
+    "RSI (period=14, weight=0.20)",
+    "EMA (fast/slow crossover, weight=0.20)",
+    "MFI - Money Flow Index (period=14, weight=0.15)",
+    "MACD (weight=0.15)",
+    "Bollinger Bands (weight=0.15)",
+    "Super Trend (period=10, multiplier=3, weight=0.10)",
+    "ADX - Average Directional Index (period=14, weight=0.05)"
+  ],
+  "position_sizing": "Kelly Criterion (conservative fraction)",
+  "leverage": "None (spot trading)",
+  "correlation_matrix": "Enabled for position sizing",
+  "market_regime_detection": "BULL/BEAR/RANGING"
+}
