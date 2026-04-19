@@ -285,7 +285,7 @@ class CompoundingCalculator:
                     state = json.load(f)
                     self.realized_pnl = state.get("realized_pnl", 0.0)
                     self.withdrawn = state.get("withdrawn", 0.0)
-            except:
+            except Exception as e:  # SECURITY: Specific exception handling
                 pass
     
     def _save_state(self):
@@ -298,7 +298,7 @@ class CompoundingCalculator:
         try:
             with open(self.state_file, 'w') as f:
                 json.dump(state, f)
-        except:
+        except Exception as e:  # SECURITY: Specific exception handling
             pass
     
     def process_trade_pnl(self, pnl: float):

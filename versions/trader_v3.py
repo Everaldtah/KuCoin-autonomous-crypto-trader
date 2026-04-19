@@ -142,7 +142,7 @@ class RobustTrader:
         try:
             with open(LOG_FILE, 'a') as f:
                 f.write(log_line + "\n")
-        except:
+        except Exception as e:  # SECURITY: Specific exception handling
             pass
 
         if level in ["BUY", "SELL", "PROFIT", "LOSS", "ALERT"]:
@@ -154,7 +154,7 @@ class RobustTrader:
                     "--priority", "high" if level in ["ALERT", "PROFIT", "LOSS"] else "default",
                     "--id", "1000"
                 ], check=False)
-            except:
+            except Exception as e:  # SECURITY: Specific exception handling
                 pass
 
     def get_kucoin_timestamp(self):
@@ -164,7 +164,7 @@ class RobustTrader:
                 capture_output=True, text=True, timeout=10
             )
             return json.loads(result.stdout)["data"]
-        except:
+        except Exception as e:  # SECURITY: Specific exception handling
             return int(time.time() * 1000)
 
     def get_signature(self, endpoint, method="GET", body=""):
