@@ -1215,6 +1215,8 @@ class SmartPortfolioTrader:
                 
                 print(f"[TRADE] SELL {pair.base}: {amount:.6f} @ ${pair.current_price:.2f} "
                       f"P&L: ${pnl:+.2f} ({pnl_pct:+.2f}%)")
+                return True
+            else:
                 print(f"[TRADE] Failed to sell {symbol}: {result}")
                 return False
                 
