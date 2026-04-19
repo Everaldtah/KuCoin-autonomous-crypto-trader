@@ -1,0 +1,210 @@
+{
+  "global_win_rate": 0.35594953972042276,
+  "avg_win_pct": 2.250835269892677,
+  "avg_loss_pct": -1.8496858138817196,
+  "full_kelly": -0.1733166468094908,
+  "recommended_fraction": "half_Kelly",
+  "recommended_pct": -0.0866583234047454,
+  "kelly_by_pair": {
+    "BTC-USDT": {
+      "full_kelly": 0,
+      "half_kelly": 0.0,
+      "quarter_kelly": 0.0,
+      "recommended": "quarter_Kelly",
+      "wr": 33.13609467455622,
+      "pf": 0.9251294379605267
+    },
+    "ETH-USDT": {
+      "full_kelly": 0,
+      "half_kelly": 0.0,
+      "quarter_kelly": 0.0,
+      "recommended": "quarter_Kelly",
+      "wr": 34.8936170212766,
+      "pf": 0.9569959082842867
+    },
+    "SOL-USDT": {
+      "full_kelly": 0,
+      "half_kelly": 0.0,
+      "quarter_kelly": 0.0,
+      "recommended": "quarter_Kelly",
+      "wr": 36.43122676579926,
+      "pf": 1.02884056286493
+    },
+    "LINK-USDT": {
+      "full_kelly": 0,
+      "half_kelly": 0.0,
+      "quarter_kelly": 0.0,
+      "recommended": "quarter_Kelly",
+      "wr": 34.24124513618677,
+      "pf": 0.9804621719625016
+    },
+    "AVAX-USDT": {
+      "full_kelly": 0,
+      "half_kelly": 0.0,
+      "quarter_kelly": 0.0,
+      "recommended": "quarter_Kelly",
+      "wr": 37.03703703703704,
+      "pf": 1.0499679504006294
+    },
+    "DOT-USDT": {
+      "full_kelly": 0,
+      "half_kelly": 0.0,
+      "quarter_kelly": 0.0,
+      "recommended": "quarter_Kelly",
+      "wr": 35.294117647058826,
+      "pf": 0.9490567832086747
+    },
+    "UNI-USDT": {
+      "full_kelly": 0,
+      "half_kelly": 0.0,
+      "quarter_kelly": 0.0,
+      "recommended": "quarter_Kelly",
+      "wr": 36.42172523961661,
+      "pf": 1.0391887862072384
+    },
+    "AAVE-USDT": {
+      "full_kelly": 0,
+      "half_kelly": 0.0,
+      "quarter_kelly": 0.0,
+      "recommended": "quarter_Kelly",
+      "wr": 36.477987421383645,
+      "pf": 1.0380307656713739
+    },
+    "ATOM-USDT": {
+      "full_kelly": 0,
+      "half_kelly": 0.0,
+      "quarter_kelly": 0.0,
+      "recommended": "quarter_Kelly",
+      "wr": 37.63837638376384,
+      "pf": 1.0578946845323454
+    },
+    "ADA-USDT": {
+      "full_kelly": 0,
+      "half_kelly": 0.0,
+      "quarter_kelly": 0.0,
+      "recommended": "quarter_Kelly",
+      "wr": 34.39716312056738,
+      "pf": 0.9399197067645854
+    },
+    "DOGE-USDT": {
+      "full_kelly": 0,
+      "half_kelly": 0.0,
+      "quarter_kelly": 0.0,
+      "recommended": "quarter_Kelly",
+      "wr": 34.23076923076923,
+      "pf": 0.89999943028674
+    }
+  },
+  "pair_stats": {
+    "BTC-USDT": {
+      "num_trades": 169,
+      "win_rate": 33.13609467455622,
+      "avg_win_pct": 2.112750098777094,
+      "avg_loss_pct": -1.8996032934569345,
+      "profit_factor": 0.9251294379605267,
+      "avg_trades_per_day": 0.9388888888888889,
+      "max_consecutive_losses": 8,
+      "avg_duration_hours": 21.90532544378698
+    },
+    "ETH-USDT": {
+      "num_trades": 235,
+      "win_rate": 34.8936170212766,
+      "avg_win_pct": 2.114941065429354,
+      "avg_loss_pct": -1.9303445711177774,
+      "profit_factor": 0.9569959082842867,
+      "avg_trades_per_day": 1.3055555555555556,
+      "max_consecutive_losses": 9,
+      "avg_duration_hours": 15.148936170212766
+    },
+    "SOL-USDT": {
+      "num_trades": 269,
+      "win_rate": 36.43122676579926,
+      "avg_win_pct": 2.223109675730069,
+      "avg_loss_pct": -1.8576805498133369,
+      "profit_factor": 1.02884056286493,
+      "avg_trades_per_day": 1.4944444444444445,
+      "max_consecutive_losses": 9,
+      "avg_duration_hours": 12.851301115241636
+    },
+    "LINK-USDT": {
+      "num_trades": 257,
+      "win_rate": 34.24124513618677,
+      "avg_win_pct": 2.42288587925119,
+      "avg_loss_pct": -1.7997663975136577,
+      "profit_factor": 0.9804621719625016,
+      "avg_trades_per_day": 1.4277777777777778,
+      "max_consecutive_losses": 8,
+      "avg_duration_hours": 13.30739299610895
+    },
+    "AVAX-USDT": {
+      "num_trades": 270,
+      "win_rate": 37.03703703703704,
+      "avg_win_pct": 2.2522336599044213,
+      "avg_loss_pct": -1.824265447621995,
+      "profit_factor": 1.0499679504006294,
+      "avg_trades_per_day": 1.5,
+      "max_consecutive_losses": 7,
+      "avg_duration_hours": 12.885185185185184
+    },
+    "DOT-USDT": {
+      "num_trades": 289,
+      "win_rate": 35.294117647058826,
+      "avg_win_pct": 2.267402387347771,
+      "avg_loss_pct": -1.801986440269589,
+      "profit_factor": 0.9490567832086747,
+      "avg_trades_per_day": 1.6055555555555556,
+      "max_consecutive_losses": 7,
+      "avg_duration_hours": 11.709342560553633
+    },
+    "UNI-USDT": {
+      "num_trades": 313,
+      "win_rate": 36.42172523961661,
+      "avg_win_pct": 2.3379259819827816,
+      "avg_loss_pct": -1.8016690950450747,
+      "profit_factor": 1.0391887862072384,
+      "avg_trades_per_day": 1.738888888888889,
+      "max_consecutive_losses": 10,
+      "avg_duration_hours": 10.827476038338657
+    },
+    "AAVE-USDT": {
+      "num_trades": 318,
+      "win_rate": 36.477987421383645,
+      "avg_win_pct": 2.181456871121636,
+      "avg_loss_pct": -1.9834305214972237,
+      "profit_factor": 1.0380307656713739,
+      "avg_trades_per_day": 1.7666666666666666,
+      "max_consecutive_losses": 11,
+      "avg_duration_hours": 10.452830188679245
+    },
+    "ATOM-USDT": {
+      "num_trades": 271,
+      "win_rate": 37.63837638376384,
+      "avg_win_pct": 2.156622715882982,
+      "avg_loss_pct": -1.8959006952693236,
+      "profit_factor": 1.0578946845323454,
+      "avg_trades_per_day": 1.5055555555555555,
+      "max_consecutive_losses": 7,
+      "avg_duration_hours": 13.00369003690037
+    },
+    "ADA-USDT": {
+      "num_trades": 282,
+      "win_rate": 34.39716312056738,
+      "avg_win_pct": 2.3546886704686485,
+      "avg_loss_pct": -1.7808901584010908,
+      "profit_factor": 0.9399197067645854,
+      "avg_trades_per_day": 1.5666666666666667,
+      "max_consecutive_losses": 9,
+      "avg_duration_hours": 12.099290780141844
+    },
+    "DOGE-USDT": {
+      "num_trades": 260,
+      "win_rate": 34.23076923076923,
+      "avg_win_pct": 2.2764365924044268,
+      "avg_loss_pct": -1.789948030384488,
+      "profit_factor": 0.89999943028674,
+      "avg_trades_per_day": 1.4444444444444444,
+      "max_consecutive_losses": 8,
+      "avg_duration_hours": 13.288461538461538
+    }
+  }
+}
