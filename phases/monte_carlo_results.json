@@ -1,0 +1,113 @@
+{
+  "num_sims": 10000,
+  "initial_capital_gbp": 1000.0,
+  "kelly_estimate": 0,
+  "kelly_used": 0.05,
+  "win_rate": 0.35594953972042276,
+  "avg_win": 2.250835269892677,
+  "avg_loss": 1.8496858138817196,
+  "scenarios": {
+    "base": {
+      "scenario": "BASE",
+      "capital_table": {
+        "p5": {
+          "capital": 514.9865898400712,
+          "return_pct": -48.50134101599288
+        },
+        "p25": {
+          "capital": 543.0650983177692,
+          "return_pct": -45.693490168223086
+        },
+        "p50": {
+          "capital": 563.5903204594024,
+          "return_pct": -43.64096795405976
+        },
+        "p75": {
+          "capital": 584.6166693957736,
+          "return_pct": -41.538333060422644
+        },
+        "p95": {
+          "capital": 617.8185981684938,
+          "return_pct": -38.21814018315062
+        }
+      },
+      "risk_metrics": {
+        "prob_20_pct_drawdown": 100.0,
+        "prob_30_pct_drawdown": 99.99,
+        "prob_50_pct_drawdown": 1.72,
+        "prob_50_pct_capital_loss": 1.41,
+        "median_max_drawdown": 43.89064455286768,
+        "p95_max_drawdown": 48.707784949462784
+      },
+      "kelly_used": 0.05
+    },
+    "conservative": {
+      "scenario": "CONSERVATIVE",
+      "capital_table": {
+        "p5": {
+          "capital": 1000.0,
+          "return_pct": 0.0
+        },
+        "p25": {
+          "capital": 1000.0,
+          "return_pct": 0.0
+        },
+        "p50": {
+          "capital": 1000.0,
+          "return_pct": 0.0
+        },
+        "p75": {
+          "capital": 1000.0,
+          "return_pct": 0.0
+        },
+        "p95": {
+          "capital": 1000.0,
+          "return_pct": 0.0
+        }
+      },
+      "risk_metrics": {
+        "prob_20_pct_drawdown": 0.02,
+        "prob_30_pct_drawdown": 0.01,
+        "prob_50_pct_drawdown": 0.0,
+        "prob_50_pct_capital_loss": 0.0,
+        "median_max_drawdown": 0.0,
+        "p95_max_drawdown": 0.0
+      },
+      "kelly_used": 0.05
+    },
+    "adverse": {
+      "scenario": "ADVERSE",
+      "capital_table": {
+        "p5": {
+          "capital": 1000.0,
+          "return_pct": 0.0
+        },
+        "p25": {
+          "capital": 1000.0,
+          "return_pct": 0.0
+        },
+        "p50": {
+          "capital": 1000.0,
+          "return_pct": 0.0
+        },
+        "p75": {
+          "capital": 1000.0,
+          "return_pct": 0.0
+        },
+        "p95": {
+          "capital": 1000.0,
+          "return_pct": 0.0
+        }
+      },
+      "risk_metrics": {
+        "prob_20_pct_drawdown": 0.0,
+        "prob_30_pct_drawdown": 0.0,
+        "prob_50_pct_drawdown": 0.0,
+        "prob_50_pct_capital_loss": 0.0,
+        "median_max_drawdown": 0.0,
+        "p95_max_drawdown": 0.0
+      },
+      "kelly_used": 0.05
+    }
+  }
+}
