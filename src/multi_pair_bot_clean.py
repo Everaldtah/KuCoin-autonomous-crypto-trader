@@ -79,6 +79,7 @@ import base64
 import os
 import sys
 import asyncio
+import uuid
 import aiohttp
 import threading
 from datetime import datetime, timedelta
@@ -126,7 +127,7 @@ MIN_POSITION_PCT = float(os.environ.get("MIN_POSITION_PCT", "3.0"))   # Min per 
 PORTFOLIO_DRAWDOWN_LIMIT = 8.0  # Emergency stop at 8% portfolio loss
 
 # Signal Thresholds (ensemble)
-BUY_SIGNAL_THRESHOLD = 0.65  # Composite score >= 65% for entry
+BUY_SIGNAL_THRESHOLD = 0.55  # Composite score >= 65% for entry
 SELL_SIGNAL_THRESHOLD = 0.35  # Composite score <= 35% for exit
 
 # Risk Management
@@ -301,12 +302,32 @@ class KuCoinAsyncClient:
         self.ws_connection = None
         self._server_ts_offset = 0
         
+    async def _sync_time(self):
+        """Sync local clock with KuCoin server to fix timestamp auth errors."""
+        try:
+            async with self.session.get(
+                f"{self.BASE_URL}/api/v1/timestamp",
+                headers={"Content-Type": "application/json"},
+                timeout=aiohttp.ClientTimeout(total=10)
+            ) as resp:
+                data = await resp.json()
+                if data.get("code") == "200000":
+                    server_ms = int(data["data"])
+                    local_ms = int(time.time() * 1000)
+                    self._server_ts_offset = server_ms - local_ms
+                    print(f"[TIME SYNC] Server={server_ms} Local={local_ms} Offset={self._server_ts_offset}ms")
+                else:
+                    print(f"[TIME SYNC] Failed: {data}")
+        except Exception as e:
+            print(f"[TIME SYNC] Error: {e}")
+
     async def connect(self):
-        """Initialize HTTP session."""
+        """Initialize HTTP session and sync clock."""
         self.session = aiohttp.ClientSession(
             headers={"Content-Type": "application/json", "KC-API-KEY-VERSION": "2"},
             timeout=aiohttp.ClientTimeout(total=30)
         )
+        await self._sync_time()
     
     async def close(self):
         """Close connections."""
@@ -382,6 +403,30 @@ class KuCoinAsyncClient:
         if success and data:
             return float(data.get("price", 0))
         return 0.0
+
+    async def get_symbol_info(self, symbol: str) -> dict:
+        """Get symbol trading rules (min size, precision, etc)."""
+        success, data = await self.get("/api/v1/symbols", auth=False)
+        if success and data:
+            for sym in data:
+                if sym.get("symbol") == symbol:
+                    return {
+                        "base_min": float(sym.get("baseMinSize", 0.0001)),
+                        "quote_min": float(sym.get("quoteMinSize", 10)),
+                        "base_increment": sym.get("baseIncrement", "0.0001"),
+                        "price_increment": sym.get("priceIncrement", "0.01")
+                    }
+        return {"base_min": 0.0001, "quote_min": 10, "base_increment": "0.0001", "price_increment": "0.01"}
+
+    def round_amount(self, amount: float, increment_str: str) -> float:
+        """Round amount to valid increment for KuCoin."""
+        if '.' in increment_str:
+            decimals = len(increment_str.split('.')[1].rstrip('0'))
+        else:
+            decimals = 0
+        factor = 10 ** decimals
+        return math.floor(amount * factor) / factor
+
     
     async def get_account(self) -> Dict:
         """Get account balances. Prioritizes 'trade' accounts (where spot trading happens)."""
@@ -411,7 +456,8 @@ class KuCoinAsyncClient:
             "symbol": symbol,
             "side": side,
             "type": "market" if price is None else "limit",
-            "size": str(amount)
+            "size": str(amount),
+            "clientOid": str(uuid.uuid4())[:32]
         }
         if price:
             body["price"] = str(price)
@@ -1082,12 +1128,23 @@ class SmartPortfolioTrader:
     async def _open_position(self, symbol: str, pair: PairData, size_usdt: float) -> bool:
         """Open a position."""
         try:
+            # Get symbol trading rules
+            sym_info = await self.client.get_symbol_info(symbol)
+            
             # Calculate size in base currency
             amount = size_usdt / pair.current_price
             
-            # Round to KuCoin precision (8 decimal places for crypto)
-            amount = round(amount, 8)
+            # Round to KuCoin increment precision
+            amount = self.client.round_amount(amount, sym_info["base_increment"])
             size_usdt = amount * pair.current_price
+            
+            # Check minimums
+            if amount < sym_info["base_min"]:
+                print(f"[SKIP] {symbol}: Amount {amount:.8f} below baseMin {sym_info['base_min']}")
+                return False
+            if size_usdt < sym_info["quote_min"]:
+                print(f"[SKIP] {symbol}: Size ${size_usdt:.2f} below quoteMin ${sym_info['quote_min']}")
+                return False
             
             success, result = await self.client.place_order(symbol, "buy", amount)
             
