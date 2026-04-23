@@ -113,7 +113,7 @@ class PositionSync:
                         
                 if total_size > 0 and total_size >= position_size * 0.5:
                     return total_cost / total_size
-        except:
+        except Exception as e:  # SECURITY: Specific exception handling
             pass
         return None
         
