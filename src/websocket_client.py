@@ -110,7 +110,7 @@ class KucoinWSClient:
             try:
                 self.ws.send(json.dumps({"id": str(int(time.time() * 1000)), "type": "ping"}))
                 time.sleep(self.PING_INTERVAL)
-            except:
+            except Exception as e:  # SECURITY: Specific exception handling
                 break
                 
     def _handle_message(self, msg):
@@ -128,7 +128,7 @@ class KucoinWSClient:
                 for cb in self.price_callbacks:
                     try:
                         cb(self.price)
-                    except:
+                    except Exception as e:  # SECURITY: Specific exception handling
                         pass
                         
             elif "match" in topic:
@@ -184,7 +184,7 @@ class KucoinWSClient:
         if self.ws:
             try:
                 self.ws.close()
-            except:
+            except Exception as e:  # SECURITY: Specific exception handling
                 pass
                 
 
