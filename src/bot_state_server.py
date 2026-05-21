@@ -45,7 +45,7 @@ class BotStateHandler(http.server.SimpleHTTPRequestHandler):
 
 if __name__ == "__main__":
     print(f"🚀 Bot State Server starting on port {PORT}")
-    print(f"📡 Serving: http://0.0.0.0:{PORT}/bot-state")
+print(f"📡 Serving: https://0.0.0.0:{PORT}/bot-state")
     
     try:
         with socketserver.TCPServer(("0.0.0.0", PORT), BotStateHandler) as httpd:
