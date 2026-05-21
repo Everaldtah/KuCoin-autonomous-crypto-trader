@@ -526,7 +526,7 @@ class SmartTrader:
         try:
             with open(LOG_FILE, "a") as f:
                 f.write(log_line + "\n")
-        except:
+except Exception:
             pass
         # Print to console only if NOT redirected (interactive mode)
         if sys.stdout.isatty():
@@ -549,7 +549,7 @@ class SmartTrader:
                 json={"chat_id": TELEGRAM_CHAT_ID, "text": text},
                 timeout=5
             )
-        except:
+except Exception:
             pass  # Non-critical — don't break the bot
 
     # ─── API Methods (native requests — no subprocess!) ─────────────────

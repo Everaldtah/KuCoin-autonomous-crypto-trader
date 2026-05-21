@@ -1,0 +1,79 @@
+[
+  {
+    "timestamp": "2026-05-21T18:17:47.167343",
+    "issues_found": 16,
+    "fixes_generated": 10,
+    "issues": [
+      {
+        "file": "trading_bot_security.py",
+        "line": 311,
+        "type": "catch_all_except",
+        "severity": "MEDIUM",
+        "fix": "Catch specific exceptions"
+      },
+      {
+        "file": "aggressive_growth_module.py",
+        "line": 288,
+        "type": "catch_all_except",
+        "severity": "MEDIUM",
+        "fix": "Catch specific exceptions"
+      },
+      {
+        "file": "aggressive_growth_module.py",
+        "line": 301,
+        "type": "catch_all_except",
+        "severity": "MEDIUM",
+        "fix": "Catch specific exceptions"
+      },
+      {
+        "file": "src/position_sync.py",
+        "line": 116,
+        "type": "catch_all_except",
+        "severity": "MEDIUM",
+        "fix": "Catch specific exceptions"
+      },
+      {
+        "file": "src/trader.py",
+        "line": 529,
+        "type": "catch_all_except",
+        "severity": "MEDIUM",
+        "fix": "Catch specific exceptions"
+      },
+      {
+        "file": "src/trader.py",
+        "line": 552,
+        "type": "catch_all_except",
+        "severity": "MEDIUM",
+        "fix": "Catch specific exceptions"
+      },
+      {
+        "file": "src/bot_state_server.py",
+        "line": 48,
+        "type": "http_instead_https",
+        "severity": "MEDIUM",
+        "fix": "Use HTTPS instead of HTTP"
+      },
+      {
+        "file": "src/websocket_client.py",
+        "line": 113,
+        "type": "catch_all_except",
+        "severity": "MEDIUM",
+        "fix": "Catch specific exceptions"
+      },
+      {
+        "file": "src/websocket_client.py",
+        "line": 131,
+        "type": "catch_all_except",
+        "severity": "MEDIUM",
+        "fix": "Catch specific exceptions"
+      },
+      {
+        "file": "src/websocket_client.py",
+        "line": 187,
+        "type": "catch_all_except",
+        "severity": "MEDIUM",
+        "fix": "Catch specific exceptions"
+      }
+    ]
+  }
+]
